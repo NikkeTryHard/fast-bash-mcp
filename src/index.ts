@@ -313,8 +313,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const defaultCwd = args.default_cwd as string | undefined;
       const defaultTimeout = (args.default_timeout as number) || 30000;
 
-      const promises = commands.map((cmd, index) =>
-        executeCommand({
+      const promises = commands.map((cmd, index) => {
+        const startTime = Date.now();
+        return executeCommand({
           command: cmd.command,
           cwd: cmd.cwd || defaultCwd,
           timeout: cmd.timeout || defaultTimeout,
@@ -322,18 +323,22 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           env: cmd.env,
         }).then((result) => ({
           index,
-          description: cmd.description || `Command ${index + 1}`,
+          command: cmd.command,
+          description: cmd.description,
           result,
-        })),
-      );
+          duration: Date.now() - startTime,
+        }));
+      });
 
       const results = await Promise.all(promises);
 
       const output = results
         .map((r) => {
-          const header = `=== ${r.description} ===`;
+          const header = r.description ? `=== ${r.description} ===` : `=== Command ${r.index + 1} ===`;
+          const cmdLine = `$ ${r.command}`;
           const body = formatResult(r.result);
-          return `${header}\n${body}`;
+          const timing = `[${r.duration}ms]`;
+          return `${header}\n${cmdLine}\n${body}\n${timing}`;
         })
         .join("\n\n");
 

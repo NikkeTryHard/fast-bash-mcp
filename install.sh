@@ -20,8 +20,8 @@ mkdir -p "$INSTALL_DIR"
 
 # Download files
 echo "Downloading server files..."
-curl -sSL "https://raw.githubusercontent.com/YOUR_USERNAME/fast-bash-mcp/main/src/index.ts" -o "$INSTALL_DIR/index.ts"
-curl -sSL "https://raw.githubusercontent.com/YOUR_USERNAME/fast-bash-mcp/main/package.json" -o "$INSTALL_DIR/package.json"
+curl -sSL "https://raw.githubusercontent.com/nikketryhard/fast-bash-mcp/main/src/index.ts" -o "$INSTALL_DIR/index.ts"
+curl -sSL "https://raw.githubusercontent.com/nikketryhard/fast-bash-mcp/main/package.json" -o "$INSTALL_DIR/package.json"
 
 # Install dependencies
 echo "Installing dependencies..."

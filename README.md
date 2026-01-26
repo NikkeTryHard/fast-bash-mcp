@@ -66,41 +66,67 @@ This MCP server provides direct bash execution without LLM pre-flight checks, gi
 
 ## Quick Install
 
-```bash
-# One-liner installation
-curl -sSL https://raw.githubusercontent.com/YOUR_USERNAME/fast-bash-mcp/main/install.sh | bash
-```
-
-Or manually:
+### Using Claude CLI (Recommended)
 
 ```bash
 # Clone the repo
-git clone https://github.com/YOUR_USERNAME/fast-bash-mcp.git ~/.claude/mcp-servers/fast-bash
+git clone https://github.com/nikketryhard/fast-bash-mcp.git ~/.claude/mcp-servers/fast-bash
 
 # Install dependencies
 cd ~/.claude/mcp-servers/fast-bash && bun install
 
-# Add MCP configuration
-cat >> ~/.claude/.mcp.json << 'EOF'
+# Add MCP server using Claude CLI
+claude mcp add --transport stdio -e FAST_BASH_DEFAULT_CWD='${PWD}' fast-bash -- bun run ~/.claude/mcp-servers/fast-bash/src/index.ts
+
+# Restart Claude Code
+```
+
+#### Scope Options
+
+```bash
+# User scope (default) - available in all projects
+claude mcp add fast-bash -- bun run ~/.claude/mcp-servers/fast-bash/src/index.ts
+
+# Project scope - only in current project (.claude/settings.local.json)
+claude mcp add --scope project fast-bash -- bun run ~/.claude/mcp-servers/fast-bash/src/index.ts
+
+# Local scope - gitignored, only your machine (.claude/settings.local.json)
+claude mcp add --scope local fast-bash -- bun run ~/.claude/mcp-servers/fast-bash/src/index.ts
+```
+
+### Manual Installation
+
+```bash
+# Clone the repo
+git clone https://github.com/nikketryhard/fast-bash-mcp.git ~/.claude/mcp-servers/fast-bash
+
+# Install dependencies
+cd ~/.claude/mcp-servers/fast-bash && bun install
+
+# Restart Claude Code
+```
+
+Then add to `~/.claude.json`:
+
+```json
 {
   "mcpServers": {
     "fast-bash": {
       "command": "bun",
-      "args": ["run", "~/.claude/mcp-servers/fast-bash/src/index.ts"],
+      "args": ["run", "/home/YOUR_USERNAME/.claude/mcp-servers/fast-bash/src/index.ts"],
       "env": {
         "FAST_BASH_DEFAULT_CWD": "${PWD}"
       }
     }
   }
 }
-EOF
-
-# Restart Claude Code
 ```
 
 ## Configuration
 
-### 1. MCP Server Configuration (~/.claude/.mcp.json)
+### 1. MCP Server Configuration (~/.claude.json)
+
+Add `mcpServers` to your `~/.claude.json`:
 
 ```json
 {
