@@ -34,14 +34,7 @@ const server = new Server(
 // Types
 // =============================================================================
 
-type ErrorType =
-  | "timeout"
-  | "killed"
-  | "spawn_error"
-  | "command_not_found"
-  | "permission_denied"
-  | "cwd_not_found"
-  | undefined;
+type ErrorType = "timeout" | "killed" | "spawn_error" | "command_not_found" | "permission_denied" | "cwd_not_found" | undefined;
 
 interface CommandResult {
   stdout: string;
@@ -144,13 +137,7 @@ function middleTruncate(text: string, maxLength: number): string {
 /**
  * Classify error type from exit code and error conditions
  */
-function classifyErrorType(
-  exitCode: number | null,
-  killed: boolean,
-  forceKilled: boolean,
-  spawnError?: Error,
-  cwdError?: boolean
-): ErrorType {
+function classifyErrorType(exitCode: number | null, killed: boolean, forceKilled: boolean, spawnError?: Error, cwdError?: boolean): ErrorType {
   if (cwdError) return "cwd_not_found";
   if (spawnError) {
     if ((spawnError as NodeJS.ErrnoException).code === "ENOENT") return "spawn_error";
@@ -172,12 +159,12 @@ function formatResult(
     timeout?: number;
     command?: string;
     showTiming?: boolean;
-  } = {}
+  } = {},
 ): string {
   const { description, timeout, command, showTiming = false } = options;
   let output = "";
 
-  if (description) output += `[${description}]\n`;
+  if (description) output += `--- ${description} ---\n`;
   if (command) output += `${formatCommandLine(command)}\n`;
   if (result.stdout) output += result.stdout;
   if (result.stderr) output += `\n[stderr]: ${result.stderr}`;
@@ -227,34 +214,14 @@ function writeOutputToFile(filePath: string, content: string): string | undefine
 /**
  * Execute a command and return result
  */
-function executeCommand(options: {
-  command: string;
-  cwd?: string;
-  timeout?: number;
-  shell?: string;
-  env?: Record<string, string>;
-  stdin?: string;
-  maxOutput?: number;
-  outputFile?: string;
-  stderrFile?: string;
-}): Promise<CommandResult> {
-  const {
-    command,
-    cwd = DEFAULT_CWD,
-    timeout = 30000,
-    shell = "bash",
-    env,
-    stdin,
-    maxOutput = 30000,
-    outputFile,
-    stderrFile,
-  } = options;
+function executeCommand(options: { command: string; cwd?: string; timeout?: number; shell?: string; env?: Record<string, string>; stdin?: string; maxOutput?: number; outputFile?: string; stderrFile?: string }): Promise<CommandResult> {
+  const { command, cwd = DEFAULT_CWD, timeout = 30000, shell = "bash", env, stdin, maxOutput = 30000, outputFile, stderrFile } = options;
 
   return new Promise((resolve) => {
     const startTime = Date.now();
 
     // Validate shell parameter
-    if (!VALID_SHELLS.includes(shell as typeof VALID_SHELLS[number])) {
+    if (!VALID_SHELLS.includes(shell as (typeof VALID_SHELLS)[number])) {
       resolve({
         stdout: "",
         stderr: `[error]: Invalid shell: ${shell}. Must be one of: ${VALID_SHELLS.join(", ")}`,
@@ -442,17 +409,7 @@ interface SequenceCommandResult {
 /**
  * Execute commands sequentially in a single shell session (stateful)
  */
-async function executeSequence(options: {
-  commands: Array<{ command: string; description?: string }>;
-  stopOnFailure?: boolean;
-  continueOnCodes?: number[];
-  cwd?: string;
-  timeout?: number;
-  shell?: string;
-  env?: Record<string, string>;
-  maxOutput?: number;
-  outputFile?: string;
-}): Promise<{
+async function executeSequence(options: { commands: Array<{ command: string; description?: string }>; stopOnFailure?: boolean; continueOnCodes?: number[]; cwd?: string; timeout?: number; shell?: string; env?: Record<string, string>; maxOutput?: number; outputFile?: string }): Promise<{
   results: SequenceCommandResult[];
   totalDurationMs: number;
   succeeded: number;
@@ -460,33 +417,25 @@ async function executeSequence(options: {
   executed: number;
   stoppedAt?: number;
 }> {
-  const {
-    commands,
-    stopOnFailure = true,
-    continueOnCodes = [0],
-    cwd = DEFAULT_CWD,
-    timeout = DEFAULT_SEQUENCE_TIMEOUT,
-    shell = "bash",
-    env,
-    maxOutput = 30000,
-    outputFile,
-  } = options;
+  const { commands, stopOnFailure = true, continueOnCodes = [0], cwd = DEFAULT_CWD, timeout = DEFAULT_SEQUENCE_TIMEOUT, shell = "bash", env, maxOutput = 30000, outputFile } = options;
 
   const startTime = Date.now();
 
   // Validate shell parameter
-  if (!VALID_SHELLS.includes(shell as typeof VALID_SHELLS[number])) {
+  if (!VALID_SHELLS.includes(shell as (typeof VALID_SHELLS)[number])) {
     return {
-      results: [{
-        index: 0,
-        command: commands[0]?.command || "",
-        stdout: "",
-        stderr: `[error]: Invalid shell: ${shell}. Must be one of: ${VALID_SHELLS.join(", ")}`,
-        exitCode: 1,
-        durationMs: 0,
-        stopped: true,
-        stopReason: "spawn_error",
-      }],
+      results: [
+        {
+          index: 0,
+          command: commands[0]?.command || "",
+          stdout: "",
+          stderr: `[error]: Invalid shell: ${shell}. Must be one of: ${VALID_SHELLS.join(", ")}`,
+          exitCode: 1,
+          durationMs: 0,
+          stopped: true,
+          stopReason: "spawn_error",
+        },
+      ],
       totalDurationMs: 0,
       succeeded: 0,
       failed: 1,
@@ -509,16 +458,18 @@ async function executeSequence(options: {
   // CWD Validation
   if (!fs.existsSync(cwd)) {
     return {
-      results: [{
-        index: 0,
-        command: commands[0]?.command || "",
-        stdout: "",
-        stderr: `[error]: Working directory does not exist: ${cwd}`,
-        exitCode: 1,
-        durationMs: 0,
-        stopped: true,
-        stopReason: "cwd_not_found",
-      }],
+      results: [
+        {
+          index: 0,
+          command: commands[0]?.command || "",
+          stdout: "",
+          stderr: `[error]: Working directory does not exist: ${cwd}`,
+          exitCode: 1,
+          durationMs: 0,
+          stopped: true,
+          stopReason: "cwd_not_found",
+        },
+      ],
       totalDurationMs: 0,
       succeeded: 0,
       failed: 1,
@@ -528,9 +479,7 @@ async function executeSequence(options: {
   }
 
   // Build shell script with markers
-  const scriptLines: string[] = [
-    "set -o pipefail",
-  ];
+  const scriptLines: string[] = ["set -o pipefail"];
 
   for (let i = 0; i < commands.length; i++) {
     const cmd = commands[i];
@@ -541,7 +490,7 @@ async function executeSequence(options: {
 
     if (stopOnFailure) {
       // Check if exit code is in continue_on_codes
-      const codesCheck = continueOnCodes.map(c => `$__ec -eq ${c}`).join(" -o ");
+      const codesCheck = continueOnCodes.map((c) => `$__ec -eq ${c}`).join(" -o ");
       scriptLines.push(`if ! [ ${codesCheck} ]; then exit $__ec; fi`);
     }
   }
@@ -560,16 +509,18 @@ async function executeSequence(options: {
       });
     } catch (err) {
       resolve({
-        results: [{
-          index: 0,
-          command: commands[0]?.command || "",
-          stdout: "",
-          stderr: `[error]: Failed to spawn process: ${(err as Error).message}`,
-          exitCode: 1,
-          durationMs: 0,
-          stopped: true,
-          stopReason: "spawn_error",
-        }],
+        results: [
+          {
+            index: 0,
+            command: commands[0]?.command || "",
+            stdout: "",
+            stderr: `[error]: Failed to spawn process: ${(err as Error).message}`,
+            exitCode: 1,
+            durationMs: 0,
+            stopped: true,
+            stopReason: "spawn_error",
+          },
+        ],
         totalDurationMs: 0,
         succeeded: 0,
         failed: 1,
@@ -686,9 +637,7 @@ async function executeSequence(options: {
 
         if (stoppedAt === i) {
           result.stopped = true;
-          result.stopReason = killed
-            ? "timeout"
-            : `exit code ${exitCode} not in continue_on_codes`;
+          result.stopReason = killed ? "timeout" : `exit code ${exitCode} not in continue_on_codes`;
         }
 
         results.push(result);
@@ -698,9 +647,7 @@ async function executeSequence(options: {
 
       // Distribute stderr (best effort - assign to last executed command)
       if (stderr && results.length > 0) {
-        results[results.length - 1].stderr = stderr.length > maxOutput
-          ? middleTruncate(stderr, maxOutput)
-          : stderr;
+        results[results.length - 1].stderr = stderr.length > maxOutput ? middleTruncate(stderr, maxOutput) : stderr;
       }
 
       resolve({
@@ -719,16 +666,18 @@ async function executeSequence(options: {
       if (graceTimer) clearTimeout(graceTimer);
 
       resolve({
-        results: [{
-          index: 1,
-          command: commands[0]?.command || "",
-          stdout: "",
-          stderr: err.message,
-          exitCode: 1,
-          durationMs: 0,
-          stopped: true,
-          stopReason: "spawn_error",
-        }],
+        results: [
+          {
+            index: 1,
+            command: commands[0]?.command || "",
+            stdout: "",
+            stderr: err.message,
+            exitCode: 1,
+            durationMs: 0,
+            stopped: true,
+            stopReason: "spawn_error",
+          },
+        ],
         totalDurationMs: Date.now() - startTime,
         succeeded: 0,
         failed: 1,
@@ -1060,22 +1009,16 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const maxOutputPerCmd = 10000; // Limit per command to prevent massive output
       const outputParts = results.map((r) => {
         const idx = r.index + 1;
-        const header = r.description
-          ? `[${idx}] === ${r.description} ===`
-          : `[${idx}] === Command ${idx} ===`;
+        const header = r.description ? `[${idx}] === ${r.description} ===` : `[${idx}] === Command ${idx} ===`;
 
         const cmdLine = formatCommandLine(r.command);
 
         let body = "";
         if (r.result.stdout) {
-          body += r.result.stdout.length > maxOutputPerCmd
-            ? middleTruncate(r.result.stdout, maxOutputPerCmd)
-            : r.result.stdout;
+          body += r.result.stdout.length > maxOutputPerCmd ? middleTruncate(r.result.stdout, maxOutputPerCmd) : r.result.stdout;
         }
         if (r.result.stderr) {
-          const stderrContent = r.result.stderr.length > maxOutputPerCmd
-            ? middleTruncate(r.result.stderr, maxOutputPerCmd)
-            : r.result.stderr;
+          const stderrContent = r.result.stderr.length > maxOutputPerCmd ? middleTruncate(r.result.stderr, maxOutputPerCmd) : r.result.stderr;
           body += `\n[stderr]: ${stderrContent}`;
         }
         if (r.result.killed) {
@@ -1159,9 +1102,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       // Format output per Batch 4.4 spec
       const outputParts = seqResult.results.map((r) => {
-        const header = r.description
-          ? `[${r.index}] === ${r.description} ===`
-          : `[${r.index}] === Command ${r.index} ===`;
+        const header = r.description ? `[${r.index}] === ${r.description} ===` : `[${r.index}] === Command ${r.index} ===`;
 
         const cmdLine = formatCommandLine(r.command);
 
@@ -1217,10 +1158,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       // Validate CWD
       if (!fs.existsSync(cwd)) {
         return {
-          content: [{
-            type: "text",
-            text: `[error]: Working directory does not exist: ${cwd}\n[error_type: cwd_not_found]`,
-          }],
+          content: [
+            {
+              type: "text",
+              text: `[error]: Working directory does not exist: ${cwd}\n[error_type: cwd_not_found]`,
+            },
+          ],
         };
       }
 
@@ -1233,10 +1176,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         });
       } catch (err) {
         return {
-          content: [{
-            type: "text",
-            text: `[error]: Failed to spawn process: ${(err as Error).message}\n[error_type: spawn_error]`,
-          }],
+          content: [
+            {
+              type: "text",
+              text: `[error]: Failed to spawn process: ${(err as Error).message}\n[error_type: spawn_error]`,
+            },
+          ],
         };
       }
 
@@ -1313,10 +1258,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       if (action === "cleanup") {
         const result = cleanupOldTasks(olderThanHours);
         return {
-          content: [{
-            type: "text",
-            text: `Cleaned up ${result.cleaned} tasks older than ${olderThanHours} hour${olderThanHours !== 1 ? "s" : ""}\nRemaining: ${result.remaining} tasks (${result.running} running, ${result.completed} completed)`,
-          }],
+          content: [
+            {
+              type: "text",
+              text: `Cleaned up ${result.cleaned} tasks older than ${olderThanHours} hour${olderThanHours !== 1 ? "s" : ""}\nRemaining: ${result.remaining} tasks (${result.running} running, ${result.completed} completed)`,
+            },
+          ],
         };
       }
 
@@ -1418,9 +1365,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       // Default: status
       const runtime = ((Date.now() - task.startTime) / 1000).toFixed(1);
-      const status = task.completed
-        ? (task.exitCode === 0 ? "completed successfully" : `failed (exit ${task.exitCode})`)
-        : "running";
+      const status = task.completed ? (task.exitCode === 0 ? "completed successfully" : `failed (exit ${task.exitCode})`) : "running";
 
       let statusOutput = `[task_id]: ${taskId}\n[status]: ${status}\n[runtime]: ${runtime}s\n[command]: ${task.command}`;
       if (task.description) statusOutput += `\n[description]: ${task.description}`;
