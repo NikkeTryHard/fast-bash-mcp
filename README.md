@@ -40,8 +40,6 @@ This MCP server provides direct bash execution without LLM pre-flight checks, gi
 | `fast_bash`           | Single command execution with all options           |
 | `fast_bash_parallel`  | Run multiple commands concurrently with summary     |
 | `fast_bash_sequence`  | Run commands sequentially in a single shell session |
-| `fast_bash_bg`        | Start background task, get task_id                  |
-| `fast_bash_bg_status` | Check/kill/list/cleanup background tasks            |
 
 ### fast_bash Parameters
 
@@ -70,16 +68,6 @@ This MCP server provides direct bash execution without LLM pre-flight checks, gi
 | `shell`             | string   | bash     | Shell: bash, zsh, or sh                  |
 | `env`               | object   | -        | Additional environment variables         |
 | `output_file`       | string   | -        | Save full output to file                 |
-
-### fast_bash_bg_status Actions
-
-| Action    | Description                                     |
-| --------- | ----------------------------------------------- |
-| `status`  | Get task status (default)                       |
-| `output`  | Get task output (supports `tail_lines`)         |
-| `kill`    | Kill task (SIGTERM, then SIGKILL after 5s)      |
-| `list`    | List all background tasks                       |
-| `cleanup` | Remove old completed tasks (`older_than_hours`) |
 
 ### v3.0 Features
 
@@ -200,9 +188,7 @@ BASH COMMANDS 0. ALWAYS use fast-bash MCP tools instead of the built-in Bash too
 1. Use mcp**fast-bash**fast_bash for single commands
 2. Use mcp**fast-bash**fast_bash_parallel for multiple independent commands
 3. Use mcp**fast-bash**fast_bash_sequence for sequential commands where cd/export persist
-4. Use mcp**fast-bash**fast_bash_bg for long-running commands (builds, servers)
-5. Use mcp**fast-bash**fast_bash_bg_status to check background task status
-6. Commands run from project directory by default. Pass cwd parameter to override.
+4. Commands run from project directory by default. Pass cwd parameter to override.
 ```
 
 ## Usage Examples
@@ -273,29 +259,6 @@ Longest: [2] Run tests (1200ms)
 
 Unlike parallel, `cd` and `export` persist between commands.
 
-### Background Task
-
-```json
-// Start
-{"command": "npm run dev", "description": "Dev server"}
-// Returns: task_id: "task_1"
-
-// Check status
-{"task_id": "task_1", "action": "status"}
-
-// Get last 50 lines of output
-{"task_id": "task_1", "action": "output", "tail_lines": 50}
-
-// Kill (graceful - SIGTERM then SIGKILL)
-{"task_id": "task_1", "action": "kill"}
-
-// List all
-{"action": "list"}
-
-// Cleanup tasks older than 1 hour
-{"action": "cleanup", "older_than_hours": 1}
-```
-
 ## How It Works
 
 ### Claude Code's Bash Tool
@@ -331,7 +294,6 @@ The MCP server uses Node.js `child_process.spawn` directly, bypassing all LLM-ba
 | Post-flight LLM check | Yes              | No                    |
 | Sandbox               | Yes (bubblewrap) | No                    |
 | cwd persistence       | Yes              | Yes (sequence only)   |
-| Background execution  | Yes              | Yes                   |
 | Output truncation     | Yes (30k)        | Yes (configurable)    |
 | Parallel commands     | No               | Yes                   |
 | Sequential commands   | No               | Yes                   |
