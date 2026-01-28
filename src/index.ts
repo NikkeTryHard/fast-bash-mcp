@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 /**
- * Fast Bash MCP Server v3.0
+ * Fast Bash MCP Server v3.1
  * Provides direct bash execution tools that bypass Claude Code's
  * slow haiku-based pre-flight checks.
  *
@@ -8,8 +8,6 @@
  * - fast_bash: Single command execution
  * - fast_bash_parallel: Multiple commands in parallel
  * - fast_bash_sequence: Sequential commands in a single shell session (stateful)
- * - fast_bash_bg: Background execution with task tracking
- * - fast_bash_bg_status: Check background task status
  */
 
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
@@ -21,7 +19,7 @@ import * as fs from "fs";
 const server = new Server(
   {
     name: "fast-bash",
-    version: "3.0.0",
+    version: "3.1.0",
   },
   {
     capabilities: {
@@ -46,33 +44,12 @@ interface CommandResult {
   durationMs?: number;
 }
 
-interface BackgroundTask {
-  id: string;
-  command: string;
-  description?: string;
-  startTime: number;
-  completedTime?: number;
-  process: ChildProcess;
-  stdout: string;
-  stderr: string;
-  exitCode: number | null;
-  completed: boolean;
-  killed: boolean;
-  error_type?: ErrorType;
-}
-
 // =============================================================================
 // Constants
 // =============================================================================
 
-const backgroundTasks = new Map<string, BackgroundTask>();
-let taskIdCounter = 0;
-
 // Default working directory: env var > process.cwd() > HOME > /tmp
 const DEFAULT_CWD = process.env.FAST_BASH_DEFAULT_CWD || process.cwd() || process.env.HOME || "/tmp";
-
-// Task retention for auto-cleanup (hours)
-const TASK_RETENTION_HOURS = parseInt(process.env.FAST_BASH_TASK_RETENTION_HOURS || "24", 10);
 
 // Grace period before SIGKILL (ms)
 const GRACEFUL_TIMEOUT_MS = 5000;
@@ -82,9 +59,6 @@ const TRUNCATION_ELLIPSIS_RESERVE = 50;
 
 // Exit code for timeout (shell convention)
 const EXIT_CODE_TIMEOUT = 124;
-
-// Maximum buffer size for background task output (1MB)
-const MAX_BG_BUFFER = 1_000_000;
 
 // Valid shells for validation
 const VALID_SHELLS = ["bash", "zsh", "sh"] as const;
@@ -164,7 +138,7 @@ function formatResult(
   const { description, timeout, command, showTiming = false } = options;
   let output = "";
 
-  if (description) output += `--- ${description} ---\n`;
+  if (description) output += `=== ${description} ===\n`;
   if (command) output += `${formatCommandLine(command)}\n`;
   if (result.stdout) output += result.stdout;
   if (result.stderr) output += `\n[stderr]: ${result.stderr}`;
@@ -358,36 +332,6 @@ function executeCommand(options: { command: string; cwd?: string; timeout?: numb
       });
     });
   });
-}
-
-// =============================================================================
-// Batch 3.2: Auto-Cleanup for Background Tasks
-// =============================================================================
-
-/**
- * Clean up old completed tasks
- */
-function cleanupOldTasks(olderThanHours: number = TASK_RETENTION_HOURS): { cleaned: number; remaining: number; running: number; completed: number } {
-  const cutoffTime = Date.now() - olderThanHours * 60 * 60 * 1000;
-  let cleaned = 0;
-  let running = 0;
-  let completed = 0;
-
-  for (const [taskId, task] of backgroundTasks) {
-    if (task.completed) {
-      const endTime = task.completedTime || task.startTime;
-      if (endTime < cutoffTime) {
-        backgroundTasks.delete(taskId);
-        cleaned++;
-      } else {
-        completed++;
-      }
-    } else {
-      running++;
-    }
-  }
-
-  return { cleaned, remaining: backgroundTasks.size, running, completed };
 }
 
 // =============================================================================
@@ -838,73 +782,6 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           required: ["commands"],
         },
       },
-      {
-        name: "fast_bash_bg",
-        description: "Start a bash command in the background. Returns a task_id immediately. Use fast_bash_bg_status to check on the task later. Good for long-running commands like builds or servers.",
-        inputSchema: {
-          type: "object",
-          properties: {
-            command: {
-              type: "string",
-              description: "The bash command to execute in background",
-            },
-            description: {
-              type: "string",
-              description: "Short description of the task",
-            },
-            cwd: {
-              type: "string",
-              description: "Working directory (optional, defaults to project directory)",
-            },
-            shell: {
-              type: "string",
-              description: "Shell to use: bash, zsh, or sh (default: bash)",
-              enum: ["bash", "zsh", "sh"],
-            },
-            env: {
-              type: "object",
-              description: "Additional environment variables to set",
-              additionalProperties: { type: "string" },
-            },
-          },
-          required: ["command"],
-        },
-      },
-      {
-        name: "fast_bash_bg_status",
-        description: "Check status of a background task, get its output, kill it, list all tasks, or cleanup old tasks.",
-        inputSchema: {
-          type: "object",
-          properties: {
-            task_id: {
-              type: "string",
-              description: "The task ID returned by fast_bash_bg",
-            },
-            action: {
-              type: "string",
-              description: "Action to take: status (default), output, kill, list, cleanup",
-              enum: ["status", "output", "kill", "list", "cleanup"],
-            },
-            max_output: {
-              type: "number",
-              description: "Maximum output length (default 30000)",
-            },
-            tail_lines: {
-              type: "number",
-              description: "Only return last N lines of output (for output action)",
-            },
-            older_than_hours: {
-              type: "number",
-              description: "For cleanup action: remove tasks older than N hours (default: 1)",
-            },
-            output_file: {
-              type: "string",
-              description: "File path to save full output (before truncation, for output action)",
-            },
-          },
-          required: [],
-        },
-      },
     ],
   };
 });
@@ -923,7 +800,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     // =========================================================================
     case "fast_bash": {
       const command = args.command as string;
-      const timeout = Math.min((args.timeout as number) || 30000, 600000);
+      const timeout = Math.min((args.timeout as number) || 180000, 600000);
 
       const result = await executeCommand({
         command,
@@ -971,7 +848,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         env?: Record<string, string>;
       }>;
       const defaultCwd = args.default_cwd as string | undefined;
-      const defaultTimeout = (args.default_timeout as number) || 30000;
+      const defaultTimeout = (args.default_timeout as number) || 300000;
       const outputFile = args.output_file as string | undefined;
 
       const overallStart = Date.now();
@@ -1141,242 +1018,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       };
     }
 
-    // =========================================================================
-    // fast_bash_bg (Batch 3.2: Auto-cleanup on each call)
-    // =========================================================================
-    case "fast_bash_bg": {
-      // Batch 3.2: Auto-cleanup old tasks
-      cleanupOldTasks();
-
-      const taskId = `task_${++taskIdCounter}`;
-      const command = args.command as string;
-      const description = args.description as string | undefined;
-      const cwd = (args.cwd as string) || DEFAULT_CWD;
-      const shell = (args.shell as string) || "bash";
-      const env = { ...process.env, ...(args.env as Record<string, string>) };
-
-      // Validate CWD
-      if (!fs.existsSync(cwd)) {
-        return {
-          content: [
-            {
-              type: "text",
-              text: `[error]: Working directory does not exist: ${cwd}\n[error_type: cwd_not_found]`,
-            },
-          ],
-        };
-      }
-
-      let proc: ChildProcess;
-      try {
-        proc = spawn(shell, ["-c", command], {
-          cwd,
-          env,
-          stdio: ["pipe", "pipe", "pipe"],
-        });
-      } catch (err) {
-        return {
-          content: [
-            {
-              type: "text",
-              text: `[error]: Failed to spawn process: ${(err as Error).message}\n[error_type: spawn_error]`,
-            },
-          ],
-        };
-      }
-
-      const task: BackgroundTask = {
-        id: taskId,
-        command,
-        description,
-        startTime: Date.now(),
-        process: proc,
-        stdout: "",
-        stderr: "",
-        exitCode: null,
-        completed: false,
-        killed: false,
-      };
-
-      proc.stdout?.on("data", (data) => {
-        task.stdout += data.toString();
-        if (task.stdout.length > MAX_BG_BUFFER) {
-          task.stdout = task.stdout.slice(-MAX_BG_BUFFER);
-        }
-      });
-
-      proc.stderr?.on("data", (data) => {
-        task.stderr += data.toString();
-        if (task.stderr.length > MAX_BG_BUFFER) {
-          task.stderr = task.stderr.slice(-MAX_BG_BUFFER);
-        }
-      });
-
-      proc.on("close", (code) => {
-        task.exitCode = code;
-        task.completed = true;
-        task.completedTime = Date.now();
-        task.error_type = classifyErrorType(code, task.killed, false);
-      });
-
-      proc.on("error", (err) => {
-        task.stderr += `\n[error]: ${err.message}`;
-        task.completed = true;
-        task.completedTime = Date.now();
-        task.exitCode = 1;
-        task.error_type = "spawn_error";
-      });
-
-      backgroundTasks.set(taskId, task);
-
-      // Close stdin to prevent commands from hanging waiting for input
-      proc.stdin?.end();
-
-      // Use formatCommandLine for consistency
-      const cmdLine = formatCommandLine(command);
-      return {
-        content: [
-          {
-            type: "text",
-            text: `Background task started\n[task_id]: ${taskId}\n[command]: ${cmdLine}${description ? `\n[description]: ${description}` : ""}\n\nUse fast_bash_bg_status with task_id="${taskId}" to check status.`,
-          },
-        ],
-      };
-    }
-
-    // =========================================================================
-    // fast_bash_bg_status (Batch 3: tail_lines, cleanup action)
-    // =========================================================================
-    case "fast_bash_bg_status": {
-      const action = (args.action as string) || "status";
-      const maxOutput = (args.max_output as number) || 30000;
-      const tailLines = args.tail_lines as number | undefined;
-      const olderThanHours = (args.older_than_hours as number) || 1;
-      const outputFile = args.output_file as string | undefined;
-
-      // Batch 3.3: Cleanup action
-      if (action === "cleanup") {
-        const result = cleanupOldTasks(olderThanHours);
-        return {
-          content: [
-            {
-              type: "text",
-              text: `Cleaned up ${result.cleaned} tasks older than ${olderThanHours} hour${olderThanHours !== 1 ? "s" : ""}\nRemaining: ${result.remaining} tasks (${result.running} running, ${result.completed} completed)`,
-            },
-          ],
-        };
-      }
-
-      if (action === "list") {
-        if (backgroundTasks.size === 0) {
-          return { content: [{ type: "text", text: "No background tasks." }] };
-        }
-
-        const list = Array.from(backgroundTasks.values())
-          .map((task) => {
-            const status = task.completed ? (task.exitCode === 0 ? "completed" : "failed") : "running";
-            const runtime = ((Date.now() - task.startTime) / 1000).toFixed(1);
-            return `[${task.id}] ${status} (${runtime}s) - ${task.description || task.command.slice(0, 50)}`;
-          })
-          .join("\n");
-
-        return { content: [{ type: "text", text: list }] };
-      }
-
-      const taskId = args.task_id as string;
-      if (!taskId) {
-        return { content: [{ type: "text", text: "[error]: task_id required for status/output/kill actions" }] };
-      }
-
-      const task = backgroundTasks.get(taskId);
-      if (!task) {
-        return { content: [{ type: "text", text: `[error]: Task ${taskId} not found` }] };
-      }
-
-      if (action === "kill") {
-        if (task.completed) {
-          return { content: [{ type: "text", text: `Task ${taskId} already completed` }] };
-        }
-        task.killed = true;
-        task.process.kill("SIGTERM");
-
-        // Graceful kill with SIGKILL fallback - store timer for potential cancellation
-        const killTimer = setTimeout(() => {
-          if (!task.completed) {
-            task.process.kill("SIGKILL");
-          }
-        }, GRACEFUL_TIMEOUT_MS);
-
-        // Cancel SIGKILL timer if process exits gracefully
-        task.process.once("close", () => {
-          clearTimeout(killTimer);
-        });
-
-        return { content: [{ type: "text", text: `Task ${taskId} killed (SIGTERM sent, SIGKILL in ${GRACEFUL_TIMEOUT_MS}ms if needed)` }] };
-      }
-
-      if (action === "output") {
-        let stdout = task.stdout;
-        let stderr = task.stderr;
-        let outputFileError: string | undefined;
-
-        // Write full output to file before processing
-        if (outputFile) {
-          outputFileError = writeOutputToFile(outputFile, stdout);
-        }
-
-        // Batch 3.1: Apply tail_lines before truncation
-        if (tailLines !== undefined && tailLines > 0) {
-          const lines = stdout.split("\n");
-          if (lines.length > tailLines) {
-            stdout = lines.slice(-tailLines).join("\n");
-          }
-        }
-
-        if (stdout.length > maxOutput) stdout = middleTruncate(stdout, maxOutput);
-        if (stderr.length > maxOutput) stderr = middleTruncate(stderr, maxOutput);
-
-        // Use formatFullOutput pattern for consistency
-        const duration = Date.now() - task.startTime;
-        let output = formatCommandLine(task.command) + "\n";
-        if (stdout) output += stdout;
-        if (stderr) output += `\n[stderr]: ${stderr}`;
-
-        if (task.completed) {
-          if (task.killed) output += "\n[killed]";
-          if (task.error_type) output += `\n[error_type: ${task.error_type}]`;
-          output += `\n[exit code: ${task.exitCode}]`;
-        } else {
-          output += "\n[still running...]";
-        }
-
-        output += `\n${formatTiming(duration)}`;
-
-        if (outputFile) {
-          if (outputFileError) {
-            output += `\n[error]: Failed to save output to ${outputFile}: ${outputFileError}`;
-          } else {
-            output += `\n[full output saved to: ${outputFile}]`;
-          }
-        }
-
-        return { content: [{ type: "text", text: output.trim() || "(no output yet)" }] };
-      }
-
-      // Default: status
-      const runtime = ((Date.now() - task.startTime) / 1000).toFixed(1);
-      const status = task.completed ? (task.exitCode === 0 ? "completed successfully" : `failed (exit ${task.exitCode})`) : "running";
-
-      let statusOutput = `[task_id]: ${taskId}\n[status]: ${status}\n[runtime]: ${runtime}s\n[command]: ${task.command}`;
-      if (task.description) statusOutput += `\n[description]: ${task.description}`;
-      if (task.error_type) statusOutput += `\n[error_type]: ${task.error_type}`;
-      statusOutput += `\n[stdout bytes]: ${task.stdout.length}\n[stderr bytes]: ${task.stderr.length}`;
-
-      return {
-        content: [{ type: "text", text: statusOutput }],
-      };
-    }
-
     default:
       throw new Error(`Unknown tool: ${toolName}`);
   }
@@ -1388,4 +1029,4 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
 const transport = new StdioServerTransport();
 server.connect(transport);
-console.error("Fast Bash MCP server v3.0 running");
+console.error("Fast Bash MCP server v3.1 running");
