@@ -63,6 +63,18 @@ const EXIT_CODE_TIMEOUT = 124;
 // Valid shells for validation
 const VALID_SHELLS = ["bash", "zsh", "sh"] as const;
 
+// Sudo rejection message
+const SUDO_REJECTION_MESSAGE = "[REJECTED] sudo commands cannot be executed. Please STOP and ask human user to run it for you!\n";
+
+/**
+ * Check if a command contains sudo
+ * Matches: sudo at start, after semicolon, after &&, after ||, after |, after $(, after backtick
+ */
+function containsSudo(command: string): boolean {
+  // Match sudo as a standalone command (not part of another word like "pseudocode")
+  return /(?:^|[;&|`$()]\s*)sudo(?:\s|$)/m.test(command);
+}
+
 // Default timeout for sequence commands (5 minutes)
 const DEFAULT_SEQUENCE_TIMEOUT = 300000;
 
@@ -188,8 +200,8 @@ function writeOutputToFile(filePath: string, content: string): string | undefine
 /**
  * Execute a command and return result
  */
-function executeCommand(options: { command: string; cwd?: string; timeout?: number; shell?: string; env?: Record<string, string>; stdin?: string; maxOutput?: number; outputFile?: string; stderrFile?: string }): Promise<CommandResult> {
-  const { command, cwd = DEFAULT_CWD, timeout = 30000, shell = "bash", env, stdin, maxOutput = 30000, outputFile, stderrFile } = options;
+function executeCommand(options: { command: string; cwd?: string; timeout?: number; shell?: string; env?: Record<string, string>; stdin?: string; maxOutput?: number; outputFile?: string; stderrFile?: string; loginShell?: boolean }): Promise<CommandResult> {
+  const { command, cwd = DEFAULT_CWD, timeout = 30000, shell = "bash", env, stdin, maxOutput = 30000, outputFile, stderrFile, loginShell = true } = options;
 
   return new Promise((resolve) => {
     const startTime = Date.now();
@@ -226,7 +238,9 @@ function executeCommand(options: { command: string; cwd?: string; timeout?: numb
 
     let proc: ChildProcess;
     try {
-      proc = spawn(shell, ["-c", command], {
+      // Use -lc for login shell (sources .profile), -c for regular
+      const shellArgs = loginShell ? ["-lc", command] : ["-c", command];
+      proc = spawn(shell, shellArgs, {
         cwd,
         env: mergedEnv,
         stdio: ["pipe", "pipe", "pipe"],
@@ -687,6 +701,10 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
               type: "string",
               description: "File path to save full stderr (before truncation)",
             },
+            login_shell: {
+              type: "boolean",
+              description: "Run as login shell (-l flag) to source .profile/.bash_profile (default: false)",
+            },
           },
           required: ["command"],
         },
@@ -800,6 +818,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     // =========================================================================
     case "fast_bash": {
       const command = args.command as string;
+
+      // Reject sudo commands
+      if (containsSudo(command)) {
+        return {
+          content: [{ type: "text", text: `${SUDO_REJECTION_MESSAGE}$ ${command}` }],
+        };
+      }
+
       const timeout = Math.min((args.timeout as number) || 180000, 600000);
 
       const result = await executeCommand({
@@ -812,6 +838,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         maxOutput: (args.max_output as number) || 30000,
         outputFile: args.output_file as string | undefined,
         stderrFile: args.stderr_file as string | undefined,
+        loginShell: (args.login_shell as boolean) || false,
       });
 
       // Use formatFullOutput for DRY consistency
@@ -847,6 +874,16 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         shell?: string;
         env?: Record<string, string>;
       }>;
+
+      // Reject any command containing sudo
+      for (let i = 0; i < commands.length; i++) {
+        if (containsSudo(commands[i].command)) {
+          return {
+            content: [{ type: "text", text: `${SUDO_REJECTION_MESSAGE}[${i + 1}] $ ${commands[i].command}` }],
+          };
+        }
+      }
+
       const defaultCwd = args.default_cwd as string | undefined;
       const defaultTimeout = (args.default_timeout as number) || 300000;
       const outputFile = args.output_file as string | undefined;
@@ -958,6 +995,16 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     // =========================================================================
     case "fast_bash_sequence": {
       const commands = args.commands as Array<{ command: string; description?: string }>;
+
+      // Reject any command containing sudo
+      for (let i = 0; i < commands.length; i++) {
+        if (containsSudo(commands[i].command)) {
+          return {
+            content: [{ type: "text", text: `${SUDO_REJECTION_MESSAGE}[${i + 1}] $ ${commands[i].command}` }],
+          };
+        }
+      }
+
       const stopOnFailure = args.stop_on_failure !== false; // default true
       const continueOnCodes = (args.continue_on_codes as number[]) || [0];
       const cwd = args.cwd as string | undefined;
