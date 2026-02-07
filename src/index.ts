@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 /**
- * Fast Bash MCP Server v3.1
+ * Fast Bash MCP Server v3.2
  * Provides direct bash execution tools that bypass Claude Code's
  * slow haiku-based pre-flight checks.
  *
@@ -15,11 +15,12 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { spawn, ChildProcess } from "child_process";
 import * as fs from "fs";
+import * as path from "path";
 
 const server = new Server(
   {
     name: "fast-bash",
-    version: "3.1.0",
+    version: "3.2.0",
   },
   {
     capabilities: {
@@ -66,6 +67,36 @@ const VALID_SHELLS = ["bash", "zsh", "sh"] as const;
 // Sudo rejection message
 const SUDO_REJECTION_MESSAGE = "[REJECTED] sudo commands cannot be executed. Please STOP and ask human user to run it for you!\n";
 
+// Security hardening toggle (set FAST_BASH_HARDENED=1 to enable)
+// When OFF: no path sanitization, no env var filtering, no max_output ceiling
+// When ON: blocks path traversal, system dir writes, dangerous env vars, caps max_output
+const HARDENED_MODE = process.env.FAST_BASH_HARDENED === "1";
+
+// Default timeout for single and parallel commands (7 minutes)
+const DEFAULT_TIMEOUT = 420000;
+
+// Maximum allowed timeout (10 minutes)
+const MAX_TIMEOUT = 600000;
+
+// Maximum allowed max_output value (10MB) — only enforced in hardened mode
+const MAX_OUTPUT_CEILING = 10_000_000;
+
+// Default max_output
+const DEFAULT_MAX_OUTPUT = 30000;
+
+// In-process memory cap for stdout/stderr accumulation (50MB)
+// Prevents OOM from commands like `yes` or `cat /dev/urandom`
+// Always active — this is a safety net, not a restriction
+const MEMORY_CAP = 50_000_000;
+
+// Environment variables that cannot be overridden (hardened mode only)
+const PROTECTED_ENV_VARS = new Set([
+  "LD_PRELOAD",
+  "LD_LIBRARY_PATH",
+  "DYLD_INSERT_LIBRARIES",
+  "DYLD_LIBRARY_PATH",
+]);
+
 /**
  * Check if a command contains sudo
  * Matches: sudo at start, after semicolon, after &&, after ||, after |, after $(, after backtick
@@ -75,8 +106,79 @@ function containsSudo(command: string): boolean {
   return /(?:^|[;&|`$()]\s*)sudo(?:\s|$)/m.test(command);
 }
 
-// Default timeout for sequence commands (5 minutes)
-const DEFAULT_SEQUENCE_TIMEOUT = 300000;
+/**
+ * Sanitize a file output path to prevent path traversal attacks.
+ * Only active in hardened mode. Returns valid:true when hardened mode is off.
+ */
+function sanitizeOutputPath(filePath: string): { valid: boolean; error?: string } {
+  if (!HARDENED_MODE) return { valid: true };
+
+  const resolved = path.resolve(filePath);
+
+  // Reject path traversal
+  if (filePath.includes("..")) {
+    return { valid: false, error: `Writing to "${filePath}" is not allowed (path traversal). Please STOP and ask human to run it for you.` };
+  }
+
+  // Reject writes to sensitive system directories
+  const blockedPrefixes = ["/etc/", "/usr/", "/bin/", "/sbin/", "/boot/", "/dev/", "/proc/", "/sys/"];
+  for (const prefix of blockedPrefixes) {
+    if (resolved.startsWith(prefix)) {
+      return { valid: false, error: `Writing to "${resolved}" is not allowed (system directory). Please STOP and ask human to run it for you.` };
+    }
+  }
+
+  return { valid: true };
+}
+
+/**
+ * Filter out protected environment variables that could be used for injection.
+ * Only active in hardened mode. Passes everything through when hardened mode is off.
+ */
+function filterEnvVars(env: Record<string, string> | undefined): { filtered: Record<string, string> | undefined; rejected: string[] } {
+  if (!env) return { filtered: undefined, rejected: [] };
+  if (!HARDENED_MODE) return { filtered: env, rejected: [] };
+
+  const rejected: string[] = [];
+  const filtered: Record<string, string> = {};
+
+  for (const [key, value] of Object.entries(env)) {
+    if (PROTECTED_ENV_VARS.has(key.toUpperCase())) {
+      rejected.push(key);
+    } else {
+      filtered[key] = value;
+    }
+  }
+
+  return { filtered: Object.keys(filtered).length > 0 ? filtered : undefined, rejected };
+}
+
+/**
+ * Clamp max_output to a safe ceiling value (hardened mode only)
+ */
+function clampMaxOutput(value: number | undefined): number {
+  if (!value || value <= 0) return DEFAULT_MAX_OUTPUT;
+  if (!HARDENED_MODE) return value;
+  return Math.min(value, MAX_OUTPUT_CEILING);
+}
+
+/**
+ * Validate output file paths. Returns error message or undefined if valid.
+ */
+function validateOutputFiles(outputFile?: string, stderrFile?: string): string | undefined {
+  if (outputFile) {
+    const check = sanitizeOutputPath(outputFile);
+    if (!check.valid) return check.error!;
+  }
+  if (stderrFile) {
+    const check = sanitizeOutputPath(stderrFile);
+    if (!check.valid) return check.error!;
+  }
+  return undefined;
+}
+
+// Default timeout for sequence commands (7 minutes)
+const DEFAULT_SEQUENCE_TIMEOUT = 420000;
 
 // Unique marker prefix for sequence parsing (unlikely to appear in normal output)
 const MARKER_PREFIX = "__FASTBASH_7f3a9c2e_";
@@ -201,7 +303,7 @@ function writeOutputToFile(filePath: string, content: string): string | undefine
  * Execute a command and return result
  */
 function executeCommand(options: { command: string; cwd?: string; timeout?: number; shell?: string; env?: Record<string, string>; stdin?: string; maxOutput?: number; outputFile?: string; stderrFile?: string; loginShell?: boolean }): Promise<CommandResult> {
-  const { command, cwd = DEFAULT_CWD, timeout = 30000, shell = "bash", env, stdin, maxOutput = 30000, outputFile, stderrFile, loginShell = true } = options;
+  const { command, cwd = DEFAULT_CWD, timeout = DEFAULT_TIMEOUT, shell = "bash", env, stdin, maxOutput = DEFAULT_MAX_OUTPUT, outputFile, stderrFile, loginShell = true } = options;
 
   return new Promise((resolve) => {
     const startTime = Date.now();
@@ -285,11 +387,15 @@ function executeCommand(options: { command: string; cwd?: string; timeout?: numb
     }
 
     proc.stdout?.on("data", (data) => {
-      stdout += data.toString();
+      if (stdout.length < MEMORY_CAP) {
+        stdout += data.toString();
+      }
     });
 
     proc.stderr?.on("data", (data) => {
-      stderr += data.toString();
+      if (stderr.length < MEMORY_CAP) {
+        stderr += data.toString();
+      }
     });
 
     proc.on("close", (code) => {
@@ -505,11 +611,15 @@ async function executeSequence(options: { commands: Array<{ command: string; des
     }, timeout);
 
     proc.stdout?.on("data", (data) => {
-      stdout += data.toString();
+      if (stdout.length < MEMORY_CAP) {
+        stdout += data.toString();
+      }
     });
 
     proc.stderr?.on("data", (data) => {
-      stderr += data.toString();
+      if (stderr.length < MEMORY_CAP) {
+        stderr += data.toString();
+      }
     });
 
     proc.on("close", () => {
@@ -669,7 +779,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             },
             timeout: {
               type: "number",
-              description: "Timeout in milliseconds (optional, default 30000, max 600000)",
+              description: "Timeout in milliseconds (optional, default 420000, max 600000)",
             },
             description: {
               type: "string",
@@ -737,7 +847,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             },
             default_timeout: {
               type: "number",
-              description: "Default timeout for all commands (default 30000)",
+              description: "Default timeout for all commands (default 420000)",
             },
             output_file: {
               type: "string",
@@ -780,7 +890,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             },
             timeout: {
               type: "number",
-              description: "Overall timeout for all commands in ms (default: 300000)",
+              description: "Overall timeout for all commands in ms (default: 420000)",
             },
             shell: {
               type: "string",
@@ -826,19 +936,28 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         };
       }
 
-      const timeout = Math.min((args.timeout as number) || 180000, 600000);
+      // Validate output file paths
+      const fileError = validateOutputFiles(args.output_file as string | undefined, args.stderr_file as string | undefined);
+      if (fileError) {
+        return { content: [{ type: "text", text: `[REJECTED] ${fileError}` }] };
+      }
+
+      // Filter protected env vars
+      const { filtered: safeEnv, rejected: rejectedVars } = filterEnvVars(args.env as Record<string, string> | undefined);
+
+      const timeout = Math.min((args.timeout as number) || DEFAULT_TIMEOUT, MAX_TIMEOUT);
 
       const result = await executeCommand({
         command,
         cwd: args.cwd as string | undefined,
         timeout,
         shell: (args.shell as string) || "bash",
-        env: args.env as Record<string, string> | undefined,
+        env: safeEnv,
         stdin: args.stdin as string | undefined,
-        maxOutput: (args.max_output as number) || 30000,
+        maxOutput: clampMaxOutput(args.max_output as number | undefined),
         outputFile: args.output_file as string | undefined,
         stderrFile: args.stderr_file as string | undefined,
-        loginShell: (args.login_shell as boolean) || false,
+        loginShell: (args.login_shell as boolean) ?? true,
       });
 
       // Use formatFullOutput for DRY consistency
@@ -855,6 +974,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
       if (args.stderr_file) {
         output += `\n[stderr saved to: ${args.stderr_file}]`;
+      }
+      if (rejectedVars.length > 0) {
+        output += `\n[security: blocked env vars: ${rejectedVars.join(", ")}]`;
       }
 
       return {
@@ -884,21 +1006,31 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         }
       }
 
-      const defaultCwd = args.default_cwd as string | undefined;
-      const defaultTimeout = (args.default_timeout as number) || 300000;
+      // Validate output file path
       const outputFile = args.output_file as string | undefined;
+      if (outputFile) {
+        const check = sanitizeOutputPath(outputFile);
+        if (!check.valid) {
+          return { content: [{ type: "text", text: `[REJECTED] ${check.error}` }] };
+        }
+      }
+
+      const defaultCwd = args.default_cwd as string | undefined;
+      const defaultTimeout = Math.min((args.default_timeout as number) || DEFAULT_TIMEOUT, MAX_TIMEOUT);
 
       const overallStart = Date.now();
 
       const promises = commands.map((cmd, index) => {
         const startTime = Date.now();
+        // Filter env vars per-command
+        const { filtered: safeEnv } = filterEnvVars(cmd.env);
         return executeCommand({
           command: cmd.command,
           cwd: cmd.cwd || defaultCwd,
-          timeout: cmd.timeout || defaultTimeout,
+          timeout: Math.min(cmd.timeout || defaultTimeout, MAX_TIMEOUT),
           shell: cmd.shell || "bash",
-          env: cmd.env,
-          maxOutput: 30000,
+          env: safeEnv,
+          maxOutput: DEFAULT_MAX_OUTPUT,
         }).then((result) => ({
           index,
           command: cmd.command,
@@ -1008,10 +1140,18 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const stopOnFailure = args.stop_on_failure !== false; // default true
       const continueOnCodes = (args.continue_on_codes as number[]) || [0];
       const cwd = args.cwd as string | undefined;
-      const timeout = (args.timeout as number) || 300000;
+      const timeout = Math.min((args.timeout as number) || DEFAULT_SEQUENCE_TIMEOUT, MAX_TIMEOUT);
       const shell = (args.shell as string) || "bash";
-      const env = args.env as Record<string, string> | undefined;
+      const { filtered: safeEnv, rejected: rejectedVars } = filterEnvVars(args.env as Record<string, string> | undefined);
       const outputFile = args.output_file as string | undefined;
+
+      // Validate output file path
+      if (outputFile) {
+        const check = sanitizeOutputPath(outputFile);
+        if (!check.valid) {
+          return { content: [{ type: "text", text: `[REJECTED] ${check.error}` }] };
+        }
+      }
 
       const seqResult = await executeSequence({
         commands,
@@ -1020,7 +1160,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         cwd,
         timeout,
         shell,
-        env,
+        env: safeEnv,
         outputFile,
       });
 
@@ -1059,6 +1199,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       if (outputFile) {
         response += `\n[output saved to: ${outputFile}]`;
       }
+      if (rejectedVars.length > 0) {
+        response += `\n[security: blocked env vars: ${rejectedVars.join(", ")}]`;
+      }
 
       return {
         content: [{ type: "text", text: response }],
@@ -1076,4 +1219,4 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
 const transport = new StdioServerTransport();
 server.connect(transport);
-console.error("Fast Bash MCP server v3.1 running");
+console.error(`Fast Bash MCP server v3.2 running (hardened: ${HARDENED_MODE ? "ON" : "OFF"})`);
