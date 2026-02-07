@@ -43,18 +43,28 @@ This MCP server provides direct bash execution without LLM pre-flight checks, gi
 
 ### fast_bash Parameters
 
-| Parameter     | Type   | Default     | Description                      |
-| ------------- | ------ | ----------- | -------------------------------- |
-| `command`     | string | required    | The bash command to execute      |
-| `cwd`         | string | project dir | Working directory                |
-| `timeout`     | number | 30000       | Timeout in ms (max 600000)       |
-| `description` | string | -           | Short description for logging    |
-| `shell`       | string | bash        | Shell: bash, zsh, or sh          |
-| `env`         | object | -           | Additional environment variables |
-| `stdin`       | string | -           | Input to pipe to command         |
-| `max_output`  | number | 30000       | Truncation limit (chars)         |
-| `output_file` | string | -           | Save full stdout to file         |
-| `stderr_file` | string | -           | Save full stderr to file         |
+| Parameter      | Type    | Default     | Description                                      |
+| -------------- | ------- | ----------- | ------------------------------------------------ |
+| `command`      | string  | required    | The bash command to execute                      |
+| `cwd`          | string  | project dir | Working directory                                |
+| `timeout`      | number  | 420000      | Timeout in ms (max 600000)                       |
+| `description`  | string  | -           | Short description for logging                    |
+| `shell`        | string  | bash        | Shell: bash, zsh, or sh                          |
+| `env`          | object  | -           | Additional environment variables                 |
+| `stdin`        | string  | -           | Input to pipe to command                         |
+| `max_output`   | number  | 30000       | Truncation limit (chars)                         |
+| `output_file`  | string  | -           | Save full stdout to file                         |
+| `stderr_file`  | string  | -           | Save full stderr to file                         |
+| `login_shell`  | boolean | true        | Run as login shell (-l flag) to source profiles  |
+
+### fast_bash_parallel Parameters
+
+| Parameter         | Type   | Default     | Description                              |
+| ----------------- | ------ | ----------- | ---------------------------------------- |
+| `commands`        | array  | required    | Array of command objects (see fast_bash)  |
+| `default_cwd`     | string | project dir | Default working directory for all commands|
+| `default_timeout`  | number | 420000      | Default timeout for all commands (ms)    |
+| `output_file`     | string | -           | Save combined output to file             |
 
 ### fast_bash_sequence Parameters
 
@@ -64,21 +74,27 @@ This MCP server provides direct bash execution without LLM pre-flight checks, gi
 | `stop_on_failure`   | boolean  | true     | Stop execution if a command fails        |
 | `continue_on_codes` | number[] | [0]      | Exit codes considered success            |
 | `cwd`               | string   | project  | Initial working directory                |
-| `timeout`           | number   | 300000   | Overall timeout for all commands (ms)    |
+| `timeout`           | number   | 420000   | Overall timeout for all commands (ms)    |
 | `shell`             | string   | bash     | Shell: bash, zsh, or sh                  |
 | `env`               | object   | -        | Additional environment variables         |
 | `output_file`       | string   | -        | Save full output to file                 |
 
-### v3.0 Features
+### v3.2 Features
 
+- **7-minute default timeout**: All tools default to 420s (7 minutes), overridable per-request up to 10 minutes
+- **Security hardening** (toggleable via `FAST_BASH_HARDENED`):
+  - Path traversal and system directory write protection for `output_file`/`stderr_file`
+  - Environment variable injection filtering (`LD_PRELOAD`, `DYLD_INSERT_LIBRARIES`, etc.)
+  - `max_output` ceiling (10MB)
+- **OOM protection**: 50MB memory cap on stdout/stderr accumulation (always active)
+- **Sudo rejection**: Commands containing `sudo` are blocked with a message to ask the human
+- **Login shell by default**: Sources `.bashrc`/`.profile` so PATH and aliases are available
 - **Sequential execution**: `fast_bash_sequence` runs commands in a single shell session where `cd` and `export` persist between commands
 - **Indexed output**: Parallel commands show `[N]` prefix with failure summary
 - **Error classification**: Returns `error_type` (timeout, killed, spawn_error, command_not_found, permission_denied, cwd_not_found)
 - **CWD validation**: Clear error messages when working directory doesn't exist
 - **Graceful timeout**: SIGTERM first, SIGKILL after 5-second grace period
 - **Output file redirection**: Save full output before truncation with `output_file`/`stderr_file`
-- **Background task cleanup**: Auto-cleanup old tasks (configurable via `FAST_BASH_TASK_RETENTION_HOURS`)
-- **Tail output**: Get last N lines with `tail_lines` parameter
 - **Middle-truncation**: Preserves beginning and end of large outputs
 
 ## Quick Install
@@ -143,12 +159,44 @@ Then add to `~/.claude.json`:
 
 ### Environment Variables
 
-| Variable                         | Default       | Description                                |
-| -------------------------------- | ------------- | ------------------------------------------ |
-| `FAST_BASH_DEFAULT_CWD`          | process.cwd() | Default working directory                  |
-| `FAST_BASH_TASK_RETENTION_HOURS` | 24            | Auto-cleanup completed tasks after N hours |
+| Variable                | Default       | Description                                        |
+| ----------------------- | ------------- | -------------------------------------------------- |
+| `FAST_BASH_DEFAULT_CWD` | process.cwd() | Default working directory                          |
+| `FAST_BASH_HARDENED`     | off           | Set to `1` to enable security hardening (see below)|
 
-### 1. MCP Server Configuration (~/.claude.json)
+### Security Hardening
+
+By default, hardened mode is **off**. To enable it, set `FAST_BASH_HARDENED=1` in your MCP config:
+
+```json
+{
+  "mcpServers": {
+    "fast-bash": {
+      "command": "bun",
+      "args": ["run", "/path/to/fast-bash-mcp/src/index.ts"],
+      "env": {
+        "FAST_BASH_DEFAULT_CWD": "${PWD}",
+        "FAST_BASH_HARDENED": "1"
+      }
+    }
+  }
+}
+```
+
+When hardened mode is enabled:
+
+| Protection | Description |
+| --- | --- |
+| **Path sanitization** | `output_file`/`stderr_file` cannot use `..` or write to `/etc/`, `/usr/`, `/bin/`, `/sbin/`, `/boot/`, `/dev/`, `/proc/`, `/sys/` |
+| **Env var filtering** | Blocks `LD_PRELOAD`, `LD_LIBRARY_PATH`, `DYLD_INSERT_LIBRARIES`, `DYLD_LIBRARY_PATH` from the `env` parameter |
+| **Output ceiling** | `max_output` capped at 10MB |
+
+**Always active** (regardless of hardened mode):
+- **Sudo rejection** — commands containing `sudo` are blocked
+- **OOM protection** — 50MB memory cap on stdout/stderr accumulation
+- **Timeout cap** — maximum 10 minutes (600,000ms) per command
+
+### MCP Server Configuration (~/.claude.json)
 
 Add `mcpServers` to your `~/.claude.json`:
 
@@ -166,7 +214,7 @@ Add `mcpServers` to your `~/.claude.json`:
 }
 ```
 
-### 2. Disable Built-in Bash (Optional)
+### Disable Built-in Bash (Optional)
 
 Add to `~/.claude/settings.json`:
 
@@ -178,7 +226,7 @@ Add to `~/.claude/settings.json`:
 }
 ```
 
-### 3. Instruct Claude to Use Fast Bash
+### Instruct Claude to Use Fast Bash
 
 Add to `~/.claude/CLAUDE.md`:
 
@@ -300,6 +348,9 @@ The MCP server uses Node.js `child_process.spawn` directly, bypassing all LLM-ba
 | Error classification  | No               | Yes                   |
 | Output file redirect  | No               | Yes                   |
 | Graceful timeout      | No               | Yes (SIGTERM+SIGKILL) |
+| Default timeout       | 10 minutes       | 7 minutes             |
+| OOM protection        | No               | Yes (50MB cap)        |
+| Security hardening    | Sandbox-based    | Toggleable (env var)  |
 
 ## Requirements
 
