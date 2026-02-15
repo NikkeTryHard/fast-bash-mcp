@@ -6277,7 +6277,7 @@ var require_formats = __commonJS((exports) => {
   }
   var TIME = /^(\d\d):(\d\d):(\d\d(?:\.\d+)?)(z|([+-])(\d\d)(?::?(\d\d))?)?$/i;
   function getTime(strictTimeZone) {
-    return function time(str) {
+    return function time3(str) {
       const matches = TIME.exec(str);
       if (!matches)
         return false;
@@ -13471,7 +13471,7 @@ class Server extends Protocol {
 }
 
 // node_modules/@modelcontextprotocol/sdk/dist/esm/server/stdio.js
-import process3 from "node:process";
+import process3 from "process";
 
 // node_modules/@modelcontextprotocol/sdk/dist/esm/shared/stdio.js
 class ReadBuffer {
@@ -13561,822 +13561,148 @@ class StdioServerTransport {
   }
 }
 
-// node_modules/@modelcontextprotocol/sdk/dist/esm/types.js
-var RELATED_TASK_META_KEY2 = "io.modelcontextprotocol/related-task";
-var JSONRPC_VERSION2 = "2.0";
-var AssertObjectSchema2 = custom((v) => v !== null && (typeof v === "object" || typeof v === "function"));
-var ProgressTokenSchema2 = union([string2(), number2().int()]);
-var CursorSchema2 = string2();
-var TaskCreationParamsSchema2 = looseObject({
-  ttl: union([number2(), _null3()]).optional(),
-  pollInterval: number2().optional()
-});
-var TaskMetadataSchema2 = object2({
-  ttl: number2().optional()
-});
-var RelatedTaskMetadataSchema2 = object2({
-  taskId: string2()
-});
-var RequestMetaSchema2 = looseObject({
-  progressToken: ProgressTokenSchema2.optional(),
-  [RELATED_TASK_META_KEY2]: RelatedTaskMetadataSchema2.optional()
-});
-var BaseRequestParamsSchema2 = object2({
-  _meta: RequestMetaSchema2.optional()
-});
-var TaskAugmentedRequestParamsSchema2 = BaseRequestParamsSchema2.extend({
-  task: TaskMetadataSchema2.optional()
-});
-var RequestSchema2 = object2({
-  method: string2(),
-  params: BaseRequestParamsSchema2.loose().optional()
-});
-var NotificationsParamsSchema2 = object2({
-  _meta: RequestMetaSchema2.optional()
-});
-var NotificationSchema2 = object2({
-  method: string2(),
-  params: NotificationsParamsSchema2.loose().optional()
-});
-var ResultSchema2 = looseObject({
-  _meta: RequestMetaSchema2.optional()
-});
-var RequestIdSchema2 = union([string2(), number2().int()]);
-var JSONRPCRequestSchema2 = object2({
-  jsonrpc: literal(JSONRPC_VERSION2),
-  id: RequestIdSchema2,
-  ...RequestSchema2.shape
-}).strict();
-var JSONRPCNotificationSchema2 = object2({
-  jsonrpc: literal(JSONRPC_VERSION2),
-  ...NotificationSchema2.shape
-}).strict();
-var JSONRPCResultResponseSchema2 = object2({
-  jsonrpc: literal(JSONRPC_VERSION2),
-  id: RequestIdSchema2,
-  result: ResultSchema2
-}).strict();
-var ErrorCode2;
-(function(ErrorCode3) {
-  ErrorCode3[ErrorCode3["ConnectionClosed"] = -32000] = "ConnectionClosed";
-  ErrorCode3[ErrorCode3["RequestTimeout"] = -32001] = "RequestTimeout";
-  ErrorCode3[ErrorCode3["ParseError"] = -32700] = "ParseError";
-  ErrorCode3[ErrorCode3["InvalidRequest"] = -32600] = "InvalidRequest";
-  ErrorCode3[ErrorCode3["MethodNotFound"] = -32601] = "MethodNotFound";
-  ErrorCode3[ErrorCode3["InvalidParams"] = -32602] = "InvalidParams";
-  ErrorCode3[ErrorCode3["InternalError"] = -32603] = "InternalError";
-  ErrorCode3[ErrorCode3["UrlElicitationRequired"] = -32042] = "UrlElicitationRequired";
-})(ErrorCode2 || (ErrorCode2 = {}));
-var JSONRPCErrorResponseSchema2 = object2({
-  jsonrpc: literal(JSONRPC_VERSION2),
-  id: RequestIdSchema2.optional(),
-  error: object2({
-    code: number2().int(),
-    message: string2(),
-    data: unknown().optional()
-  })
-}).strict();
-var JSONRPCMessageSchema2 = union([
-  JSONRPCRequestSchema2,
-  JSONRPCNotificationSchema2,
-  JSONRPCResultResponseSchema2,
-  JSONRPCErrorResponseSchema2
-]);
-var JSONRPCResponseSchema2 = union([JSONRPCResultResponseSchema2, JSONRPCErrorResponseSchema2]);
-var EmptyResultSchema2 = ResultSchema2.strict();
-var CancelledNotificationParamsSchema2 = NotificationsParamsSchema2.extend({
-  requestId: RequestIdSchema2.optional(),
-  reason: string2().optional()
-});
-var CancelledNotificationSchema2 = NotificationSchema2.extend({
-  method: literal("notifications/cancelled"),
-  params: CancelledNotificationParamsSchema2
-});
-var IconSchema2 = object2({
-  src: string2(),
-  mimeType: string2().optional(),
-  sizes: array(string2()).optional(),
-  theme: _enum(["light", "dark"]).optional()
-});
-var IconsSchema2 = object2({
-  icons: array(IconSchema2).optional()
-});
-var BaseMetadataSchema2 = object2({
-  name: string2(),
-  title: string2().optional()
-});
-var ImplementationSchema2 = BaseMetadataSchema2.extend({
-  ...BaseMetadataSchema2.shape,
-  ...IconsSchema2.shape,
-  version: string2(),
-  websiteUrl: string2().optional(),
-  description: string2().optional()
-});
-var FormElicitationCapabilitySchema2 = intersection(object2({
-  applyDefaults: boolean2().optional()
-}), record(string2(), unknown()));
-var ElicitationCapabilitySchema2 = preprocess((value) => {
-  if (value && typeof value === "object" && !Array.isArray(value)) {
-    if (Object.keys(value).length === 0) {
-      return { form: {} };
-    }
-  }
-  return value;
-}, intersection(object2({
-  form: FormElicitationCapabilitySchema2.optional(),
-  url: AssertObjectSchema2.optional()
-}), record(string2(), unknown()).optional()));
-var ClientTasksCapabilitySchema2 = looseObject({
-  list: AssertObjectSchema2.optional(),
-  cancel: AssertObjectSchema2.optional(),
-  requests: looseObject({
-    sampling: looseObject({
-      createMessage: AssertObjectSchema2.optional()
-    }).optional(),
-    elicitation: looseObject({
-      create: AssertObjectSchema2.optional()
-    }).optional()
-  }).optional()
-});
-var ServerTasksCapabilitySchema2 = looseObject({
-  list: AssertObjectSchema2.optional(),
-  cancel: AssertObjectSchema2.optional(),
-  requests: looseObject({
-    tools: looseObject({
-      call: AssertObjectSchema2.optional()
-    }).optional()
-  }).optional()
-});
-var ClientCapabilitiesSchema2 = object2({
-  experimental: record(string2(), AssertObjectSchema2).optional(),
-  sampling: object2({
-    context: AssertObjectSchema2.optional(),
-    tools: AssertObjectSchema2.optional()
-  }).optional(),
-  elicitation: ElicitationCapabilitySchema2.optional(),
-  roots: object2({
-    listChanged: boolean2().optional()
-  }).optional(),
-  tasks: ClientTasksCapabilitySchema2.optional()
-});
-var InitializeRequestParamsSchema2 = BaseRequestParamsSchema2.extend({
-  protocolVersion: string2(),
-  capabilities: ClientCapabilitiesSchema2,
-  clientInfo: ImplementationSchema2
-});
-var InitializeRequestSchema2 = RequestSchema2.extend({
-  method: literal("initialize"),
-  params: InitializeRequestParamsSchema2
-});
-var ServerCapabilitiesSchema2 = object2({
-  experimental: record(string2(), AssertObjectSchema2).optional(),
-  logging: AssertObjectSchema2.optional(),
-  completions: AssertObjectSchema2.optional(),
-  prompts: object2({
-    listChanged: boolean2().optional()
-  }).optional(),
-  resources: object2({
-    subscribe: boolean2().optional(),
-    listChanged: boolean2().optional()
-  }).optional(),
-  tools: object2({
-    listChanged: boolean2().optional()
-  }).optional(),
-  tasks: ServerTasksCapabilitySchema2.optional()
-});
-var InitializeResultSchema2 = ResultSchema2.extend({
-  protocolVersion: string2(),
-  capabilities: ServerCapabilitiesSchema2,
-  serverInfo: ImplementationSchema2,
-  instructions: string2().optional()
-});
-var InitializedNotificationSchema2 = NotificationSchema2.extend({
-  method: literal("notifications/initialized"),
-  params: NotificationsParamsSchema2.optional()
-});
-var PingRequestSchema2 = RequestSchema2.extend({
-  method: literal("ping"),
-  params: BaseRequestParamsSchema2.optional()
-});
-var ProgressSchema2 = object2({
-  progress: number2(),
-  total: optional(number2()),
-  message: optional(string2())
-});
-var ProgressNotificationParamsSchema2 = object2({
-  ...NotificationsParamsSchema2.shape,
-  ...ProgressSchema2.shape,
-  progressToken: ProgressTokenSchema2
-});
-var ProgressNotificationSchema2 = NotificationSchema2.extend({
-  method: literal("notifications/progress"),
-  params: ProgressNotificationParamsSchema2
-});
-var PaginatedRequestParamsSchema2 = BaseRequestParamsSchema2.extend({
-  cursor: CursorSchema2.optional()
-});
-var PaginatedRequestSchema2 = RequestSchema2.extend({
-  params: PaginatedRequestParamsSchema2.optional()
-});
-var PaginatedResultSchema2 = ResultSchema2.extend({
-  nextCursor: CursorSchema2.optional()
-});
-var TaskStatusSchema2 = _enum(["working", "input_required", "completed", "failed", "cancelled"]);
-var TaskSchema2 = object2({
-  taskId: string2(),
-  status: TaskStatusSchema2,
-  ttl: union([number2(), _null3()]),
-  createdAt: string2(),
-  lastUpdatedAt: string2(),
-  pollInterval: optional(number2()),
-  statusMessage: optional(string2())
-});
-var CreateTaskResultSchema2 = ResultSchema2.extend({
-  task: TaskSchema2
-});
-var TaskStatusNotificationParamsSchema2 = NotificationsParamsSchema2.merge(TaskSchema2);
-var TaskStatusNotificationSchema2 = NotificationSchema2.extend({
-  method: literal("notifications/tasks/status"),
-  params: TaskStatusNotificationParamsSchema2
-});
-var GetTaskRequestSchema2 = RequestSchema2.extend({
-  method: literal("tasks/get"),
-  params: BaseRequestParamsSchema2.extend({
-    taskId: string2()
-  })
-});
-var GetTaskResultSchema2 = ResultSchema2.merge(TaskSchema2);
-var GetTaskPayloadRequestSchema2 = RequestSchema2.extend({
-  method: literal("tasks/result"),
-  params: BaseRequestParamsSchema2.extend({
-    taskId: string2()
-  })
-});
-var GetTaskPayloadResultSchema2 = ResultSchema2.loose();
-var ListTasksRequestSchema2 = PaginatedRequestSchema2.extend({
-  method: literal("tasks/list")
-});
-var ListTasksResultSchema2 = PaginatedResultSchema2.extend({
-  tasks: array(TaskSchema2)
-});
-var CancelTaskRequestSchema2 = RequestSchema2.extend({
-  method: literal("tasks/cancel"),
-  params: BaseRequestParamsSchema2.extend({
-    taskId: string2()
-  })
-});
-var CancelTaskResultSchema2 = ResultSchema2.merge(TaskSchema2);
-var ResourceContentsSchema2 = object2({
-  uri: string2(),
-  mimeType: optional(string2()),
-  _meta: record(string2(), unknown()).optional()
-});
-var TextResourceContentsSchema2 = ResourceContentsSchema2.extend({
-  text: string2()
-});
-var Base64Schema2 = string2().refine((val) => {
-  try {
-    atob(val);
-    return true;
-  } catch {
-    return false;
-  }
-}, { message: "Invalid Base64 string" });
-var BlobResourceContentsSchema2 = ResourceContentsSchema2.extend({
-  blob: Base64Schema2
-});
-var RoleSchema2 = _enum(["user", "assistant"]);
-var AnnotationsSchema2 = object2({
-  audience: array(RoleSchema2).optional(),
-  priority: number2().min(0).max(1).optional(),
-  lastModified: exports_iso.datetime({ offset: true }).optional()
-});
-var ResourceSchema2 = object2({
-  ...BaseMetadataSchema2.shape,
-  ...IconsSchema2.shape,
-  uri: string2(),
-  description: optional(string2()),
-  mimeType: optional(string2()),
-  annotations: AnnotationsSchema2.optional(),
-  _meta: optional(looseObject({}))
-});
-var ResourceTemplateSchema2 = object2({
-  ...BaseMetadataSchema2.shape,
-  ...IconsSchema2.shape,
-  uriTemplate: string2(),
-  description: optional(string2()),
-  mimeType: optional(string2()),
-  annotations: AnnotationsSchema2.optional(),
-  _meta: optional(looseObject({}))
-});
-var ListResourcesRequestSchema2 = PaginatedRequestSchema2.extend({
-  method: literal("resources/list")
-});
-var ListResourcesResultSchema2 = PaginatedResultSchema2.extend({
-  resources: array(ResourceSchema2)
-});
-var ListResourceTemplatesRequestSchema2 = PaginatedRequestSchema2.extend({
-  method: literal("resources/templates/list")
-});
-var ListResourceTemplatesResultSchema2 = PaginatedResultSchema2.extend({
-  resourceTemplates: array(ResourceTemplateSchema2)
-});
-var ResourceRequestParamsSchema2 = BaseRequestParamsSchema2.extend({
-  uri: string2()
-});
-var ReadResourceRequestParamsSchema2 = ResourceRequestParamsSchema2;
-var ReadResourceRequestSchema2 = RequestSchema2.extend({
-  method: literal("resources/read"),
-  params: ReadResourceRequestParamsSchema2
-});
-var ReadResourceResultSchema2 = ResultSchema2.extend({
-  contents: array(union([TextResourceContentsSchema2, BlobResourceContentsSchema2]))
-});
-var ResourceListChangedNotificationSchema2 = NotificationSchema2.extend({
-  method: literal("notifications/resources/list_changed"),
-  params: NotificationsParamsSchema2.optional()
-});
-var SubscribeRequestParamsSchema2 = ResourceRequestParamsSchema2;
-var SubscribeRequestSchema2 = RequestSchema2.extend({
-  method: literal("resources/subscribe"),
-  params: SubscribeRequestParamsSchema2
-});
-var UnsubscribeRequestParamsSchema2 = ResourceRequestParamsSchema2;
-var UnsubscribeRequestSchema2 = RequestSchema2.extend({
-  method: literal("resources/unsubscribe"),
-  params: UnsubscribeRequestParamsSchema2
-});
-var ResourceUpdatedNotificationParamsSchema2 = NotificationsParamsSchema2.extend({
-  uri: string2()
-});
-var ResourceUpdatedNotificationSchema2 = NotificationSchema2.extend({
-  method: literal("notifications/resources/updated"),
-  params: ResourceUpdatedNotificationParamsSchema2
-});
-var PromptArgumentSchema2 = object2({
-  name: string2(),
-  description: optional(string2()),
-  required: optional(boolean2())
-});
-var PromptSchema2 = object2({
-  ...BaseMetadataSchema2.shape,
-  ...IconsSchema2.shape,
-  description: optional(string2()),
-  arguments: optional(array(PromptArgumentSchema2)),
-  _meta: optional(looseObject({}))
-});
-var ListPromptsRequestSchema2 = PaginatedRequestSchema2.extend({
-  method: literal("prompts/list")
-});
-var ListPromptsResultSchema2 = PaginatedResultSchema2.extend({
-  prompts: array(PromptSchema2)
-});
-var GetPromptRequestParamsSchema2 = BaseRequestParamsSchema2.extend({
-  name: string2(),
-  arguments: record(string2(), string2()).optional()
-});
-var GetPromptRequestSchema2 = RequestSchema2.extend({
-  method: literal("prompts/get"),
-  params: GetPromptRequestParamsSchema2
-});
-var TextContentSchema2 = object2({
-  type: literal("text"),
-  text: string2(),
-  annotations: AnnotationsSchema2.optional(),
-  _meta: record(string2(), unknown()).optional()
-});
-var ImageContentSchema2 = object2({
-  type: literal("image"),
-  data: Base64Schema2,
-  mimeType: string2(),
-  annotations: AnnotationsSchema2.optional(),
-  _meta: record(string2(), unknown()).optional()
-});
-var AudioContentSchema2 = object2({
-  type: literal("audio"),
-  data: Base64Schema2,
-  mimeType: string2(),
-  annotations: AnnotationsSchema2.optional(),
-  _meta: record(string2(), unknown()).optional()
-});
-var ToolUseContentSchema2 = object2({
-  type: literal("tool_use"),
-  name: string2(),
-  id: string2(),
-  input: record(string2(), unknown()),
-  _meta: record(string2(), unknown()).optional()
-});
-var EmbeddedResourceSchema2 = object2({
-  type: literal("resource"),
-  resource: union([TextResourceContentsSchema2, BlobResourceContentsSchema2]),
-  annotations: AnnotationsSchema2.optional(),
-  _meta: record(string2(), unknown()).optional()
-});
-var ResourceLinkSchema2 = ResourceSchema2.extend({
-  type: literal("resource_link")
-});
-var ContentBlockSchema2 = union([
-  TextContentSchema2,
-  ImageContentSchema2,
-  AudioContentSchema2,
-  ResourceLinkSchema2,
-  EmbeddedResourceSchema2
-]);
-var PromptMessageSchema2 = object2({
-  role: RoleSchema2,
-  content: ContentBlockSchema2
-});
-var GetPromptResultSchema2 = ResultSchema2.extend({
-  description: string2().optional(),
-  messages: array(PromptMessageSchema2)
-});
-var PromptListChangedNotificationSchema2 = NotificationSchema2.extend({
-  method: literal("notifications/prompts/list_changed"),
-  params: NotificationsParamsSchema2.optional()
-});
-var ToolAnnotationsSchema2 = object2({
-  title: string2().optional(),
-  readOnlyHint: boolean2().optional(),
-  destructiveHint: boolean2().optional(),
-  idempotentHint: boolean2().optional(),
-  openWorldHint: boolean2().optional()
-});
-var ToolExecutionSchema2 = object2({
-  taskSupport: _enum(["required", "optional", "forbidden"]).optional()
-});
-var ToolSchema2 = object2({
-  ...BaseMetadataSchema2.shape,
-  ...IconsSchema2.shape,
-  description: string2().optional(),
-  inputSchema: object2({
-    type: literal("object"),
-    properties: record(string2(), AssertObjectSchema2).optional(),
-    required: array(string2()).optional()
-  }).catchall(unknown()),
-  outputSchema: object2({
-    type: literal("object"),
-    properties: record(string2(), AssertObjectSchema2).optional(),
-    required: array(string2()).optional()
-  }).catchall(unknown()).optional(),
-  annotations: ToolAnnotationsSchema2.optional(),
-  execution: ToolExecutionSchema2.optional(),
-  _meta: record(string2(), unknown()).optional()
-});
-var ListToolsRequestSchema2 = PaginatedRequestSchema2.extend({
-  method: literal("tools/list")
-});
-var ListToolsResultSchema2 = PaginatedResultSchema2.extend({
-  tools: array(ToolSchema2)
-});
-var CallToolResultSchema2 = ResultSchema2.extend({
-  content: array(ContentBlockSchema2).default([]),
-  structuredContent: record(string2(), unknown()).optional(),
-  isError: boolean2().optional()
-});
-var CompatibilityCallToolResultSchema2 = CallToolResultSchema2.or(ResultSchema2.extend({
-  toolResult: unknown()
-}));
-var CallToolRequestParamsSchema2 = TaskAugmentedRequestParamsSchema2.extend({
-  name: string2(),
-  arguments: record(string2(), unknown()).optional()
-});
-var CallToolRequestSchema2 = RequestSchema2.extend({
-  method: literal("tools/call"),
-  params: CallToolRequestParamsSchema2
-});
-var ToolListChangedNotificationSchema2 = NotificationSchema2.extend({
-  method: literal("notifications/tools/list_changed"),
-  params: NotificationsParamsSchema2.optional()
-});
-var ListChangedOptionsBaseSchema2 = object2({
-  autoRefresh: boolean2().default(true),
-  debounceMs: number2().int().nonnegative().default(300)
-});
-var LoggingLevelSchema2 = _enum(["debug", "info", "notice", "warning", "error", "critical", "alert", "emergency"]);
-var SetLevelRequestParamsSchema2 = BaseRequestParamsSchema2.extend({
-  level: LoggingLevelSchema2
-});
-var SetLevelRequestSchema2 = RequestSchema2.extend({
-  method: literal("logging/setLevel"),
-  params: SetLevelRequestParamsSchema2
-});
-var LoggingMessageNotificationParamsSchema2 = NotificationsParamsSchema2.extend({
-  level: LoggingLevelSchema2,
-  logger: string2().optional(),
-  data: unknown()
-});
-var LoggingMessageNotificationSchema2 = NotificationSchema2.extend({
-  method: literal("notifications/message"),
-  params: LoggingMessageNotificationParamsSchema2
-});
-var ModelHintSchema2 = object2({
-  name: string2().optional()
-});
-var ModelPreferencesSchema2 = object2({
-  hints: array(ModelHintSchema2).optional(),
-  costPriority: number2().min(0).max(1).optional(),
-  speedPriority: number2().min(0).max(1).optional(),
-  intelligencePriority: number2().min(0).max(1).optional()
-});
-var ToolChoiceSchema2 = object2({
-  mode: _enum(["auto", "required", "none"]).optional()
-});
-var ToolResultContentSchema2 = object2({
-  type: literal("tool_result"),
-  toolUseId: string2().describe("The unique identifier for the corresponding tool call."),
-  content: array(ContentBlockSchema2).default([]),
-  structuredContent: object2({}).loose().optional(),
-  isError: boolean2().optional(),
-  _meta: record(string2(), unknown()).optional()
-});
-var SamplingContentSchema2 = discriminatedUnion("type", [TextContentSchema2, ImageContentSchema2, AudioContentSchema2]);
-var SamplingMessageContentBlockSchema2 = discriminatedUnion("type", [
-  TextContentSchema2,
-  ImageContentSchema2,
-  AudioContentSchema2,
-  ToolUseContentSchema2,
-  ToolResultContentSchema2
-]);
-var SamplingMessageSchema2 = object2({
-  role: RoleSchema2,
-  content: union([SamplingMessageContentBlockSchema2, array(SamplingMessageContentBlockSchema2)]),
-  _meta: record(string2(), unknown()).optional()
-});
-var CreateMessageRequestParamsSchema2 = TaskAugmentedRequestParamsSchema2.extend({
-  messages: array(SamplingMessageSchema2),
-  modelPreferences: ModelPreferencesSchema2.optional(),
-  systemPrompt: string2().optional(),
-  includeContext: _enum(["none", "thisServer", "allServers"]).optional(),
-  temperature: number2().optional(),
-  maxTokens: number2().int(),
-  stopSequences: array(string2()).optional(),
-  metadata: AssertObjectSchema2.optional(),
-  tools: array(ToolSchema2).optional(),
-  toolChoice: ToolChoiceSchema2.optional()
-});
-var CreateMessageRequestSchema2 = RequestSchema2.extend({
-  method: literal("sampling/createMessage"),
-  params: CreateMessageRequestParamsSchema2
-});
-var CreateMessageResultSchema2 = ResultSchema2.extend({
-  model: string2(),
-  stopReason: optional(_enum(["endTurn", "stopSequence", "maxTokens"]).or(string2())),
-  role: RoleSchema2,
-  content: SamplingContentSchema2
-});
-var CreateMessageResultWithToolsSchema2 = ResultSchema2.extend({
-  model: string2(),
-  stopReason: optional(_enum(["endTurn", "stopSequence", "maxTokens", "toolUse"]).or(string2())),
-  role: RoleSchema2,
-  content: union([SamplingMessageContentBlockSchema2, array(SamplingMessageContentBlockSchema2)])
-});
-var BooleanSchemaSchema2 = object2({
-  type: literal("boolean"),
-  title: string2().optional(),
-  description: string2().optional(),
-  default: boolean2().optional()
-});
-var StringSchemaSchema2 = object2({
-  type: literal("string"),
-  title: string2().optional(),
-  description: string2().optional(),
-  minLength: number2().optional(),
-  maxLength: number2().optional(),
-  format: _enum(["email", "uri", "date", "date-time"]).optional(),
-  default: string2().optional()
-});
-var NumberSchemaSchema2 = object2({
-  type: _enum(["number", "integer"]),
-  title: string2().optional(),
-  description: string2().optional(),
-  minimum: number2().optional(),
-  maximum: number2().optional(),
-  default: number2().optional()
-});
-var UntitledSingleSelectEnumSchemaSchema2 = object2({
-  type: literal("string"),
-  title: string2().optional(),
-  description: string2().optional(),
-  enum: array(string2()),
-  default: string2().optional()
-});
-var TitledSingleSelectEnumSchemaSchema2 = object2({
-  type: literal("string"),
-  title: string2().optional(),
-  description: string2().optional(),
-  oneOf: array(object2({
-    const: string2(),
-    title: string2()
-  })),
-  default: string2().optional()
-});
-var LegacyTitledEnumSchemaSchema2 = object2({
-  type: literal("string"),
-  title: string2().optional(),
-  description: string2().optional(),
-  enum: array(string2()),
-  enumNames: array(string2()).optional(),
-  default: string2().optional()
-});
-var SingleSelectEnumSchemaSchema2 = union([UntitledSingleSelectEnumSchemaSchema2, TitledSingleSelectEnumSchemaSchema2]);
-var UntitledMultiSelectEnumSchemaSchema2 = object2({
-  type: literal("array"),
-  title: string2().optional(),
-  description: string2().optional(),
-  minItems: number2().optional(),
-  maxItems: number2().optional(),
-  items: object2({
-    type: literal("string"),
-    enum: array(string2())
-  }),
-  default: array(string2()).optional()
-});
-var TitledMultiSelectEnumSchemaSchema2 = object2({
-  type: literal("array"),
-  title: string2().optional(),
-  description: string2().optional(),
-  minItems: number2().optional(),
-  maxItems: number2().optional(),
-  items: object2({
-    anyOf: array(object2({
-      const: string2(),
-      title: string2()
-    }))
-  }),
-  default: array(string2()).optional()
-});
-var MultiSelectEnumSchemaSchema2 = union([UntitledMultiSelectEnumSchemaSchema2, TitledMultiSelectEnumSchemaSchema2]);
-var EnumSchemaSchema2 = union([LegacyTitledEnumSchemaSchema2, SingleSelectEnumSchemaSchema2, MultiSelectEnumSchemaSchema2]);
-var PrimitiveSchemaDefinitionSchema2 = union([EnumSchemaSchema2, BooleanSchemaSchema2, StringSchemaSchema2, NumberSchemaSchema2]);
-var ElicitRequestFormParamsSchema2 = TaskAugmentedRequestParamsSchema2.extend({
-  mode: literal("form").optional(),
-  message: string2(),
-  requestedSchema: object2({
-    type: literal("object"),
-    properties: record(string2(), PrimitiveSchemaDefinitionSchema2),
-    required: array(string2()).optional()
-  })
-});
-var ElicitRequestURLParamsSchema2 = TaskAugmentedRequestParamsSchema2.extend({
-  mode: literal("url"),
-  message: string2(),
-  elicitationId: string2(),
-  url: string2().url()
-});
-var ElicitRequestParamsSchema2 = union([ElicitRequestFormParamsSchema2, ElicitRequestURLParamsSchema2]);
-var ElicitRequestSchema2 = RequestSchema2.extend({
-  method: literal("elicitation/create"),
-  params: ElicitRequestParamsSchema2
-});
-var ElicitationCompleteNotificationParamsSchema2 = NotificationsParamsSchema2.extend({
-  elicitationId: string2()
-});
-var ElicitationCompleteNotificationSchema2 = NotificationSchema2.extend({
-  method: literal("notifications/elicitation/complete"),
-  params: ElicitationCompleteNotificationParamsSchema2
-});
-var ElicitResultSchema2 = ResultSchema2.extend({
-  action: _enum(["accept", "decline", "cancel"]),
-  content: preprocess((val) => val === null ? undefined : val, record(string2(), union([string2(), number2(), boolean2(), array(string2())])).optional())
-});
-var ResourceTemplateReferenceSchema2 = object2({
-  type: literal("ref/resource"),
-  uri: string2()
-});
-var PromptReferenceSchema2 = object2({
-  type: literal("ref/prompt"),
-  name: string2()
-});
-var CompleteRequestParamsSchema2 = BaseRequestParamsSchema2.extend({
-  ref: union([PromptReferenceSchema2, ResourceTemplateReferenceSchema2]),
-  argument: object2({
-    name: string2(),
-    value: string2()
-  }),
-  context: object2({
-    arguments: record(string2(), string2()).optional()
-  }).optional()
-});
-var CompleteRequestSchema2 = RequestSchema2.extend({
-  method: literal("completion/complete"),
-  params: CompleteRequestParamsSchema2
-});
-var CompleteResultSchema2 = ResultSchema2.extend({
-  completion: looseObject({
-    values: array(string2()).max(100),
-    total: optional(number2().int()),
-    hasMore: optional(boolean2())
-  })
-});
-var RootSchema2 = object2({
-  uri: string2().startsWith("file://"),
-  name: string2().optional(),
-  _meta: record(string2(), unknown()).optional()
-});
-var ListRootsRequestSchema2 = RequestSchema2.extend({
-  method: literal("roots/list"),
-  params: BaseRequestParamsSchema2.optional()
-});
-var ListRootsResultSchema2 = ResultSchema2.extend({
-  roots: array(RootSchema2)
-});
-var RootsListChangedNotificationSchema2 = NotificationSchema2.extend({
-  method: literal("notifications/roots/list_changed"),
-  params: NotificationsParamsSchema2.optional()
-});
-var ClientRequestSchema2 = union([
-  PingRequestSchema2,
-  InitializeRequestSchema2,
-  CompleteRequestSchema2,
-  SetLevelRequestSchema2,
-  GetPromptRequestSchema2,
-  ListPromptsRequestSchema2,
-  ListResourcesRequestSchema2,
-  ListResourceTemplatesRequestSchema2,
-  ReadResourceRequestSchema2,
-  SubscribeRequestSchema2,
-  UnsubscribeRequestSchema2,
-  CallToolRequestSchema2,
-  ListToolsRequestSchema2,
-  GetTaskRequestSchema2,
-  GetTaskPayloadRequestSchema2,
-  ListTasksRequestSchema2,
-  CancelTaskRequestSchema2
-]);
-var ClientNotificationSchema2 = union([
-  CancelledNotificationSchema2,
-  ProgressNotificationSchema2,
-  InitializedNotificationSchema2,
-  RootsListChangedNotificationSchema2,
-  TaskStatusNotificationSchema2
-]);
-var ClientResultSchema2 = union([
-  EmptyResultSchema2,
-  CreateMessageResultSchema2,
-  CreateMessageResultWithToolsSchema2,
-  ElicitResultSchema2,
-  ListRootsResultSchema2,
-  GetTaskResultSchema2,
-  ListTasksResultSchema2,
-  CreateTaskResultSchema2
-]);
-var ServerRequestSchema2 = union([
-  PingRequestSchema2,
-  CreateMessageRequestSchema2,
-  ElicitRequestSchema2,
-  ListRootsRequestSchema2,
-  GetTaskRequestSchema2,
-  GetTaskPayloadRequestSchema2,
-  ListTasksRequestSchema2,
-  CancelTaskRequestSchema2
-]);
-var ServerNotificationSchema2 = union([
-  CancelledNotificationSchema2,
-  ProgressNotificationSchema2,
-  LoggingMessageNotificationSchema2,
-  ResourceUpdatedNotificationSchema2,
-  ResourceListChangedNotificationSchema2,
-  ToolListChangedNotificationSchema2,
-  PromptListChangedNotificationSchema2,
-  TaskStatusNotificationSchema2,
-  ElicitationCompleteNotificationSchema2
-]);
-var ServerResultSchema2 = union([
-  EmptyResultSchema2,
-  InitializeResultSchema2,
-  CompleteResultSchema2,
-  GetPromptResultSchema2,
-  ListPromptsResultSchema2,
-  ListResourcesResultSchema2,
-  ListResourceTemplatesResultSchema2,
-  ReadResourceResultSchema2,
-  CallToolResultSchema2,
-  ListToolsResultSchema2,
-  GetTaskResultSchema2,
-  ListTasksResultSchema2,
-  CreateTaskResultSchema2
-]);
-
 // src/index.ts
 import { spawn } from "child_process";
 import * as fs from "fs";
+import * as path from "path";
 var server = new Server({
   name: "fast-bash",
-  version: "3.0.0"
+  version: "3.2.0"
 }, {
   capabilities: {
     tools: {}
   }
 });
-var backgroundTasks = new Map;
-var taskIdCounter = 0;
 var DEFAULT_CWD = process.env.FAST_BASH_DEFAULT_CWD || process.cwd() || process.env.HOME || "/tmp";
-var TASK_RETENTION_HOURS = parseInt(process.env.FAST_BASH_TASK_RETENTION_HOURS || "24", 10);
 var GRACEFUL_TIMEOUT_MS = 5000;
 var TRUNCATION_ELLIPSIS_RESERVE = 50;
 var EXIT_CODE_TIMEOUT = 124;
-var MAX_BG_BUFFER = 1e6;
 var VALID_SHELLS = ["bash", "zsh", "sh"];
+var SUDO_REJECTION_MESSAGE = `[REJECTED] sudo commands cannot be executed. Please STOP and ask human user to run it for you!
+`;
+var INTERACTIVE_REJECTION_MESSAGE = "[REJECTED] Interactive commands cannot be executed in non-TTY mode. Use non-interactive alternatives (e.g. `ssh host 'command'` instead of `ssh host`).\n";
+var BLOCKED_SSH_HOSTS = new Set(["supernova"]);
+var HARDENED_MODE = process.env.FAST_BASH_HARDENED === "1";
+var DEFAULT_TIMEOUT = 420000;
+var MAX_TIMEOUT = 600000;
+var MAX_OUTPUT_CEILING = 1e7;
+var DEFAULT_MAX_OUTPUT = 30000;
+var MEMORY_CAP = 50000000;
+var PROTECTED_ENV_VARS = new Set([
+  "LD_PRELOAD",
+  "LD_LIBRARY_PATH",
+  "DYLD_INSERT_LIBRARIES",
+  "DYLD_LIBRARY_PATH"
+]);
+function containsSudo(command) {
+  return /(?:^|[;&|`$()]\s*)sudo(?:\s|$)/m.test(command);
+}
+function isInteractiveCommand(command) {
+  const segments = command.split(/[;&|]+/).map((s) => s.trim());
+  for (const seg of segments) {
+    if (!seg)
+      continue;
+    const tokens = seg.split(/\s+/);
+    let cmdIndex = 0;
+    while (cmdIndex < tokens.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(tokens[cmdIndex])) {
+      cmdIndex++;
+    }
+    if (cmdIndex >= tokens.length)
+      continue;
+    const binary = path.basename(tokens[cmdIndex]);
+    const rest = tokens.slice(cmdIndex + 1);
+    if (binary === "ssh") {
+      const flagsWithArg = new Set(["-b", "-c", "-D", "-E", "-e", "-F", "-I", "-i", "-J", "-L", "-l", "-m", "-O", "-o", "-p", "-Q", "-R", "-S", "-W", "-w"]);
+      const positional = [];
+      for (let i = 0;i < rest.length; i++) {
+        const tok = rest[i];
+        if (tok === "--") {
+          positional.push(...rest.slice(i + 1));
+          break;
+        }
+        if (tok.startsWith("-") && flagsWithArg.has(tok)) {
+          i++;
+        } else if (tok.startsWith("-")) {} else {
+          positional.push(tok);
+        }
+      }
+      const host = positional[0]?.replace(/^.*@/, "");
+      if (host && BLOCKED_SSH_HOSTS.has(host))
+        return true;
+      if (positional.length <= 1)
+        return true;
+      continue;
+    }
+    if (binary === "telnet" || binary === "ftp" || binary === "sftp") {
+      return true;
+    }
+    if ((binary === "bash" || binary === "zsh" || binary === "sh" || binary === "fish" || binary === "csh" || binary === "tcsh") && !rest.some((t) => t === "-c")) {
+      const nonFlagArgs = rest.filter((t) => !t.startsWith("-"));
+      if (nonFlagArgs.length === 0)
+        return true;
+    }
+    if ((binary === "python" || binary === "python3" || binary === "python2") && rest.length === 0)
+      return true;
+    if (binary === "node" && rest.length === 0)
+      return true;
+    if (binary === "irb" || binary === "pry")
+      return true;
+  }
+  return false;
+}
+function sanitizeOutputPath(filePath) {
+  if (!HARDENED_MODE)
+    return { valid: true };
+  const resolved = path.resolve(filePath);
+  if (filePath.includes("..")) {
+    return { valid: false, error: `Writing to "${filePath}" is not allowed (path traversal). Please STOP and ask human to run it for you.` };
+  }
+  const blockedPrefixes = ["/etc/", "/usr/", "/bin/", "/sbin/", "/boot/", "/dev/", "/proc/", "/sys/"];
+  for (const prefix of blockedPrefixes) {
+    if (resolved.startsWith(prefix)) {
+      return { valid: false, error: `Writing to "${resolved}" is not allowed (system directory). Please STOP and ask human to run it for you.` };
+    }
+  }
+  return { valid: true };
+}
+function filterEnvVars(env) {
+  if (!env)
+    return { filtered: undefined, rejected: [] };
+  if (!HARDENED_MODE)
+    return { filtered: env, rejected: [] };
+  const rejected = [];
+  const filtered = {};
+  for (const [key, value] of Object.entries(env)) {
+    if (PROTECTED_ENV_VARS.has(key.toUpperCase())) {
+      rejected.push(key);
+    } else {
+      filtered[key] = value;
+    }
+  }
+  return { filtered: Object.keys(filtered).length > 0 ? filtered : undefined, rejected };
+}
+function clampMaxOutput(value) {
+  if (!value || value <= 0)
+    return DEFAULT_MAX_OUTPUT;
+  if (!HARDENED_MODE)
+    return value;
+  return Math.min(value, MAX_OUTPUT_CEILING);
+}
+function validateOutputFiles(outputFile, stderrFile) {
+  if (outputFile) {
+    const check = sanitizeOutputPath(outputFile);
+    if (!check.valid)
+      return check.error;
+  }
+  if (stderrFile) {
+    const check = sanitizeOutputPath(stderrFile);
+    if (!check.valid)
+      return check.error;
+  }
+  return;
+}
+var DEFAULT_SEQUENCE_TIMEOUT = 420000;
+var MARKER_PREFIX = "__FASTBASH_7f3a9c2e_";
 function formatCommandLine(command) {
   return `$ ${command}`;
 }
@@ -14416,7 +13742,7 @@ function formatResult(result, options = {}) {
   const { description, timeout, command, showTiming = false } = options;
   let output = "";
   if (description)
-    output += `[${description}]
+    output += `=== ${description} ===
 `;
   if (command)
     output += `${formatCommandLine(command)}
@@ -14456,21 +13782,11 @@ function writeOutputToFile(filePath, content) {
   }
 }
 function executeCommand(options) {
-  const {
-    command,
-    cwd = DEFAULT_CWD,
-    timeout = 30000,
-    shell = "bash",
-    env,
-    stdin,
-    maxOutput = 30000,
-    outputFile,
-    stderrFile
-  } = options;
-  return new Promise((resolve) => {
+  const { command, cwd = DEFAULT_CWD, timeout = DEFAULT_TIMEOUT, shell = "bash", env, stdin, maxOutput = DEFAULT_MAX_OUTPUT, outputFile, stderrFile, loginShell = false } = options;
+  return new Promise((resolve2) => {
     const startTime = Date.now();
     if (!VALID_SHELLS.includes(shell)) {
-      resolve({
+      resolve2({
         stdout: "",
         stderr: `[error]: Invalid shell: ${shell}. Must be one of: ${VALID_SHELLS.join(", ")}`,
         exitCode: 1,
@@ -14482,7 +13798,7 @@ function executeCommand(options) {
       return;
     }
     if (!fs.existsSync(cwd)) {
-      resolve({
+      resolve2({
         stdout: "",
         stderr: `[error]: Working directory does not exist: ${cwd}`,
         exitCode: 1,
@@ -14496,13 +13812,15 @@ function executeCommand(options) {
     const mergedEnv = { ...process.env, ...env };
     let proc;
     try {
-      proc = spawn(shell, ["-c", command], {
+      const shellArgs = loginShell ? ["-lc", command] : ["-c", command];
+      proc = spawn(shell, shellArgs, {
         cwd,
         env: mergedEnv,
-        stdio: ["pipe", "pipe", "pipe"]
+        stdio: ["pipe", "pipe", "pipe"],
+        detached: true
       });
     } catch (err) {
-      resolve({
+      resolve2({
         stdout: "",
         stderr: `[error]: Failed to spawn process: ${err.message}`,
         exitCode: 1,
@@ -14513,33 +13831,56 @@ function executeCommand(options) {
       });
       return;
     }
+    if (stdin) {
+      proc.stdin?.write(stdin);
+      proc.stdin?.end();
+    } else {
+      proc.stdin?.end();
+    }
     let stdout = "";
     let stderr = "";
     let killed = false;
     let forceKilled = false;
     let completed = false;
     let graceTimer;
+    let stdoutEnded = false;
+    let stderrEnded = false;
+    let exitCode = null;
+    const killGroup = (signal) => {
+      const pid = proc.pid;
+      if (pid) {
+        try {
+          process.kill(-pid, signal);
+        } catch {
+          proc.kill(signal);
+        }
+      } else {
+        proc.kill(signal);
+      }
+    };
     const timer = setTimeout(() => {
       killed = true;
-      proc.kill("SIGTERM");
+      killGroup("SIGTERM");
       graceTimer = setTimeout(() => {
         if (!completed) {
-          proc.kill("SIGKILL");
+          killGroup("SIGKILL");
           forceKilled = true;
         }
       }, GRACEFUL_TIMEOUT_MS);
     }, timeout);
-    if (stdin) {
-      proc.stdin?.write(stdin);
-      proc.stdin?.end();
-    }
     proc.stdout?.on("data", (data) => {
-      stdout += data.toString();
+      if (stdout.length < MEMORY_CAP) {
+        stdout += data.toString();
+      }
     });
     proc.stderr?.on("data", (data) => {
-      stderr += data.toString();
+      if (stderr.length < MEMORY_CAP) {
+        stderr += data.toString();
+      }
     });
-    proc.on("close", (code) => {
+    const maybeResolve = () => {
+      if (!stdoutEnded || !stderrEnded || exitCode === undefined)
+        return;
       completed = true;
       clearTimeout(timer);
       if (graceTimer)
@@ -14559,16 +13900,28 @@ function executeCommand(options) {
       if (truncatedStderr.length > maxOutput) {
         truncatedStderr = middleTruncate(truncatedStderr, maxOutput);
       }
-      const error_type = classifyErrorType(code, killed, forceKilled);
-      resolve({
+      const error_type = classifyErrorType(exitCode, killed, forceKilled);
+      resolve2({
         stdout: truncatedStdout,
         stderr: truncatedStderr,
-        exitCode: killed ? EXIT_CODE_TIMEOUT : code,
+        exitCode: killed ? EXIT_CODE_TIMEOUT : exitCode,
         killed,
         forceKilled,
         error_type,
         durationMs
       });
+    };
+    proc.stdout?.on("end", () => {
+      stdoutEnded = true;
+      maybeResolve();
+    });
+    proc.stderr?.on("end", () => {
+      stderrEnded = true;
+      maybeResolve();
+    });
+    proc.on("close", (code) => {
+      exitCode = code;
+      maybeResolve();
     });
     proc.on("error", (err) => {
       completed = true;
@@ -14576,7 +13929,7 @@ function executeCommand(options) {
       if (graceTimer)
         clearTimeout(graceTimer);
       const durationMs = Date.now() - startTime;
-      resolve({
+      resolve2({
         stdout: "",
         stderr: err.message,
         exitCode: 1,
@@ -14588,51 +13941,23 @@ function executeCommand(options) {
     });
   });
 }
-function cleanupOldTasks(olderThanHours = TASK_RETENTION_HOURS) {
-  const cutoffTime = Date.now() - olderThanHours * 60 * 60 * 1000;
-  let cleaned = 0;
-  let running = 0;
-  let completed = 0;
-  for (const [taskId, task] of backgroundTasks) {
-    if (task.completed) {
-      const endTime = task.completedTime || task.startTime;
-      if (endTime < cutoffTime) {
-        backgroundTasks.delete(taskId);
-        cleaned++;
-      } else {
-        completed++;
-      }
-    } else {
-      running++;
-    }
-  }
-  return { cleaned, remaining: backgroundTasks.size, running, completed };
-}
 async function executeSequence(options) {
-  const {
-    commands,
-    stopOnFailure = true,
-    continueOnCodes = [0],
-    cwd = DEFAULT_CWD,
-    timeout = 300000,
-    shell = "bash",
-    env,
-    maxOutput = 30000,
-    outputFile
-  } = options;
+  const { commands, stopOnFailure = true, continueOnCodes = [0], cwd = DEFAULT_CWD, timeout = DEFAULT_SEQUENCE_TIMEOUT, shell = "bash", env, maxOutput = 30000, outputFile } = options;
   const startTime = Date.now();
-  if (!fs.existsSync(cwd)) {
+  if (!VALID_SHELLS.includes(shell)) {
     return {
-      results: [{
-        index: 0,
-        command: commands[0]?.command || "",
-        stdout: "",
-        stderr: `[error]: Working directory does not exist: ${cwd}`,
-        exitCode: 1,
-        durationMs: 0,
-        stopped: true,
-        stopReason: "cwd_not_found"
-      }],
+      results: [
+        {
+          index: 0,
+          command: commands[0]?.command || "",
+          stdout: "",
+          stderr: `[error]: Invalid shell: ${shell}. Must be one of: ${VALID_SHELLS.join(", ")}`,
+          exitCode: 1,
+          durationMs: 0,
+          stopped: true,
+          stopReason: "spawn_error"
+        }
+      ],
       totalDurationMs: 0,
       succeeded: 0,
       failed: 1,
@@ -14640,15 +13965,43 @@ async function executeSequence(options) {
       stoppedAt: 0
     };
   }
-  const scriptLines = [
-    "set -o pipefail"
-  ];
+  if (commands.length === 0) {
+    return {
+      results: [],
+      totalDurationMs: 0,
+      succeeded: 0,
+      failed: 0,
+      executed: 0
+    };
+  }
+  if (!fs.existsSync(cwd)) {
+    return {
+      results: [
+        {
+          index: 0,
+          command: commands[0]?.command || "",
+          stdout: "",
+          stderr: `[error]: Working directory does not exist: ${cwd}`,
+          exitCode: 1,
+          durationMs: 0,
+          stopped: true,
+          stopReason: "cwd_not_found"
+        }
+      ],
+      totalDurationMs: 0,
+      succeeded: 0,
+      failed: 1,
+      executed: 0,
+      stoppedAt: 0
+    };
+  }
+  const scriptLines = ["set -o pipefail"];
   for (let i = 0;i < commands.length; i++) {
     const cmd = commands[i];
     const idx = i + 1;
-    scriptLines.push(`echo "===CMD_START:${idx}:$(date +%s%3N)==="`);
+    scriptLines.push(`echo "${MARKER_PREFIX}START:${idx}:$(date +%s%3N)"`);
     scriptLines.push(cmd.command);
-    scriptLines.push(`__ec=$?; echo "===CMD_END:${idx}:$__ec:$(date +%s%3N)==="`);
+    scriptLines.push(`__ec=$?; echo "${MARKER_PREFIX}END:${idx}:$__ec:$(date +%s%3N)"`);
     if (stopOnFailure) {
       const codesCheck = continueOnCodes.map((c) => `$__ec -eq ${c}`).join(" -o ");
       scriptLines.push(`if ! [ ${codesCheck} ]; then exit $__ec; fi`);
@@ -14657,26 +14010,29 @@ async function executeSequence(options) {
   const script = scriptLines.join(`
 `);
   const mergedEnv = { ...process.env, ...env };
-  return new Promise((resolve) => {
+  return new Promise((resolve2) => {
     let proc;
     try {
       proc = spawn(shell, ["-c", script], {
         cwd,
         env: mergedEnv,
-        stdio: ["pipe", "pipe", "pipe"]
+        stdio: ["pipe", "pipe", "pipe"],
+        detached: true
       });
     } catch (err) {
-      resolve({
-        results: [{
-          index: 0,
-          command: commands[0]?.command || "",
-          stdout: "",
-          stderr: `[error]: Failed to spawn process: ${err.message}`,
-          exitCode: 1,
-          durationMs: 0,
-          stopped: true,
-          stopReason: "spawn_error"
-        }],
+      resolve2({
+        results: [
+          {
+            index: 0,
+            command: commands[0]?.command || "",
+            stdout: "",
+            stderr: `[error]: Failed to spawn process: ${err.message}`,
+            exitCode: 1,
+            durationMs: 0,
+            stopped: true,
+            stopReason: "spawn_error"
+          }
+        ],
         totalDurationMs: 0,
         succeeded: 0,
         failed: 1,
@@ -14685,27 +14041,49 @@ async function executeSequence(options) {
       });
       return;
     }
+    proc.stdin?.end();
     let stdout = "";
     let stderr = "";
     let killed = false;
     let completed = false;
     let graceTimer;
+    let stdoutEnded = false;
+    let stderrEnded = false;
+    let processExited = false;
+    const killGroup = (signal) => {
+      const pid = proc.pid;
+      if (pid) {
+        try {
+          process.kill(-pid, signal);
+        } catch {
+          proc.kill(signal);
+        }
+      } else {
+        proc.kill(signal);
+      }
+    };
     const timer = setTimeout(() => {
       killed = true;
-      proc.kill("SIGTERM");
+      killGroup("SIGTERM");
       graceTimer = setTimeout(() => {
         if (!completed) {
-          proc.kill("SIGKILL");
+          killGroup("SIGKILL");
         }
       }, GRACEFUL_TIMEOUT_MS);
     }, timeout);
     proc.stdout?.on("data", (data) => {
-      stdout += data.toString();
+      if (stdout.length < MEMORY_CAP) {
+        stdout += data.toString();
+      }
     });
     proc.stderr?.on("data", (data) => {
-      stderr += data.toString();
+      if (stderr.length < MEMORY_CAP) {
+        stderr += data.toString();
+      }
     });
-    proc.on("close", () => {
+    const maybeResolve = () => {
+      if (!stdoutEnded || !stderrEnded || !processExited)
+        return;
       completed = true;
       clearTimeout(timer);
       if (graceTimer)
@@ -14721,8 +14099,8 @@ async function executeSequence(options) {
       for (let i = 0;i < commands.length; i++) {
         const idx = i + 1;
         const cmd = commands[i];
-        const startMarkerRegex = new RegExp(`===CMD_START:${idx}:(\\d+)===`);
-        const endMarkerRegex = new RegExp(`===CMD_END:${idx}:(\\d+):(\\d+)===`);
+        const startMarkerRegex = new RegExp(`${MARKER_PREFIX}START:${idx}:(\\d+)`);
+        const endMarkerRegex = new RegExp(`${MARKER_PREFIX}END:${idx}:(\\d+):(\\d+)`);
         const startMatch = stdout.match(startMarkerRegex);
         const endMatch = stdout.match(endMarkerRegex);
         if (!startMatch) {
@@ -14780,7 +14158,7 @@ async function executeSequence(options) {
       if (stderr && results.length > 0) {
         results[results.length - 1].stderr = stderr.length > maxOutput ? middleTruncate(stderr, maxOutput) : stderr;
       }
-      resolve({
+      resolve2({
         results,
         totalDurationMs,
         succeeded,
@@ -14788,23 +14166,37 @@ async function executeSequence(options) {
         executed: results.length,
         stoppedAt
       });
+    };
+    proc.stdout?.on("end", () => {
+      stdoutEnded = true;
+      maybeResolve();
+    });
+    proc.stderr?.on("end", () => {
+      stderrEnded = true;
+      maybeResolve();
+    });
+    proc.on("close", () => {
+      processExited = true;
+      maybeResolve();
     });
     proc.on("error", (err) => {
       completed = true;
       clearTimeout(timer);
       if (graceTimer)
         clearTimeout(graceTimer);
-      resolve({
-        results: [{
-          index: 1,
-          command: commands[0]?.command || "",
-          stdout: "",
-          stderr: err.message,
-          exitCode: 1,
-          durationMs: 0,
-          stopped: true,
-          stopReason: "spawn_error"
-        }],
+      resolve2({
+        results: [
+          {
+            index: 1,
+            command: commands[0]?.command || "",
+            stdout: "",
+            stderr: err.message,
+            exitCode: 1,
+            durationMs: 0,
+            stopped: true,
+            stopReason: "spawn_error"
+          }
+        ],
         totalDurationMs: Date.now() - startTime,
         succeeded: 0,
         failed: 1,
@@ -14814,7 +14206,7 @@ async function executeSequence(options) {
     });
   });
 }
-server.setRequestHandler(ListToolsRequestSchema2, async () => {
+server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
     tools: [
       {
@@ -14833,7 +14225,7 @@ server.setRequestHandler(ListToolsRequestSchema2, async () => {
             },
             timeout: {
               type: "number",
-              description: "Timeout in milliseconds (optional, default 30000, max 600000)"
+              description: "Timeout in milliseconds (optional, default 420000, max 600000)"
             },
             description: {
               type: "string",
@@ -14864,6 +14256,10 @@ server.setRequestHandler(ListToolsRequestSchema2, async () => {
             stderr_file: {
               type: "string",
               description: "File path to save full stderr (before truncation)"
+            },
+            login_shell: {
+              type: "boolean",
+              description: "Run as login shell (-l flag) to source .profile/.bash_profile (default: false)"
             }
           },
           required: ["command"]
@@ -14897,7 +14293,7 @@ server.setRequestHandler(ListToolsRequestSchema2, async () => {
             },
             default_timeout: {
               type: "number",
-              description: "Default timeout for all commands (default 30000)"
+              description: "Default timeout for all commands (default 420000)"
             },
             output_file: {
               type: "string",
@@ -14940,7 +14336,7 @@ server.setRequestHandler(ListToolsRequestSchema2, async () => {
             },
             timeout: {
               type: "number",
-              description: "Overall timeout for all commands in ms (default: 300000)"
+              description: "Overall timeout for all commands in ms (default: 420000)"
             },
             shell: {
               type: "string",
@@ -14959,94 +14355,43 @@ server.setRequestHandler(ListToolsRequestSchema2, async () => {
           },
           required: ["commands"]
         }
-      },
-      {
-        name: "fast_bash_bg",
-        description: "Start a bash command in the background. Returns a task_id immediately. Use fast_bash_bg_status to check on the task later. Good for long-running commands like builds or servers.",
-        inputSchema: {
-          type: "object",
-          properties: {
-            command: {
-              type: "string",
-              description: "The bash command to execute in background"
-            },
-            description: {
-              type: "string",
-              description: "Short description of the task"
-            },
-            cwd: {
-              type: "string",
-              description: "Working directory (optional, defaults to project directory)"
-            },
-            shell: {
-              type: "string",
-              description: "Shell to use: bash, zsh, or sh (default: bash)",
-              enum: ["bash", "zsh", "sh"]
-            },
-            env: {
-              type: "object",
-              description: "Additional environment variables to set",
-              additionalProperties: { type: "string" }
-            }
-          },
-          required: ["command"]
-        }
-      },
-      {
-        name: "fast_bash_bg_status",
-        description: "Check status of a background task, get its output, kill it, list all tasks, or cleanup old tasks.",
-        inputSchema: {
-          type: "object",
-          properties: {
-            task_id: {
-              type: "string",
-              description: "The task ID returned by fast_bash_bg"
-            },
-            action: {
-              type: "string",
-              description: "Action to take: status (default), output, kill, list, cleanup",
-              enum: ["status", "output", "kill", "list", "cleanup"]
-            },
-            max_output: {
-              type: "number",
-              description: "Maximum output length (default 30000)"
-            },
-            tail_lines: {
-              type: "number",
-              description: "Only return last N lines of output (for output action)"
-            },
-            older_than_hours: {
-              type: "number",
-              description: "For cleanup action: remove tasks older than N hours (default: 1)"
-            },
-            output_file: {
-              type: "string",
-              description: "File path to save full output (before truncation, for output action)"
-            }
-          },
-          required: []
-        }
       }
     ]
   };
 });
-server.setRequestHandler(CallToolRequestSchema2, async (request) => {
+server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const toolName = request.params.name;
   const args = request.params.arguments;
   switch (toolName) {
     case "fast_bash": {
       const command = args.command;
-      const timeout = Math.min(args.timeout || 30000, 600000);
+      if (containsSudo(command)) {
+        return {
+          content: [{ type: "text", text: `${SUDO_REJECTION_MESSAGE}$ ${command}` }]
+        };
+      }
+      if (isInteractiveCommand(command)) {
+        return {
+          content: [{ type: "text", text: `${INTERACTIVE_REJECTION_MESSAGE}$ ${command}` }]
+        };
+      }
+      const fileError = validateOutputFiles(args.output_file, args.stderr_file);
+      if (fileError) {
+        return { content: [{ type: "text", text: `[REJECTED] ${fileError}` }] };
+      }
+      const { filtered: safeEnv, rejected: rejectedVars } = filterEnvVars(args.env);
+      const timeout = Math.min(args.timeout || DEFAULT_TIMEOUT, MAX_TIMEOUT);
       const result = await executeCommand({
         command,
         cwd: args.cwd,
         timeout,
         shell: args.shell || "bash",
-        env: args.env,
+        env: safeEnv,
         stdin: args.stdin,
-        maxOutput: args.max_output || 30000,
+        maxOutput: clampMaxOutput(args.max_output),
         outputFile: args.output_file,
-        stderrFile: args.stderr_file
+        stderrFile: args.stderr_file,
+        loginShell: args.login_shell ?? false
       });
       let output = formatResult(result, {
         description: args.description,
@@ -15062,24 +14407,50 @@ server.setRequestHandler(CallToolRequestSchema2, async (request) => {
         output += `
 [stderr saved to: ${args.stderr_file}]`;
       }
+      if (rejectedVars.length > 0) {
+        output += `
+[security: blocked env vars: ${rejectedVars.join(", ")}]`;
+      }
       return {
         content: [{ type: "text", text: output }]
       };
     }
     case "fast_bash_parallel": {
       const commands = args.commands;
-      const defaultCwd = args.default_cwd;
-      const defaultTimeout = args.default_timeout || 30000;
+      for (let i = 0;i < commands.length; i++) {
+        if (containsSudo(commands[i].command)) {
+          return {
+            content: [{ type: "text", text: `${SUDO_REJECTION_MESSAGE}[${i + 1}] $ ${commands[i].command}` }]
+          };
+        }
+      }
+      for (let i = 0;i < commands.length; i++) {
+        if (isInteractiveCommand(commands[i].command)) {
+          return {
+            content: [{ type: "text", text: `${INTERACTIVE_REJECTION_MESSAGE}[${i + 1}] $ ${commands[i].command}` }]
+          };
+        }
+      }
       const outputFile = args.output_file;
+      if (outputFile) {
+        const check = sanitizeOutputPath(outputFile);
+        if (!check.valid) {
+          return { content: [{ type: "text", text: `[REJECTED] ${check.error}` }] };
+        }
+      }
+      const defaultCwd = args.default_cwd;
+      const defaultTimeout = Math.min(args.default_timeout || DEFAULT_TIMEOUT, MAX_TIMEOUT);
       const overallStart = Date.now();
       const promises = commands.map((cmd, index) => {
         const startTime = Date.now();
+        const { filtered: safeEnv } = filterEnvVars(cmd.env);
         return executeCommand({
           command: cmd.command,
           cwd: cmd.cwd || defaultCwd,
-          timeout: cmd.timeout || defaultTimeout,
+          timeout: Math.min(cmd.timeout || defaultTimeout, MAX_TIMEOUT),
           shell: cmd.shell || "bash",
-          env: cmd.env
+          env: safeEnv,
+          maxOutput: DEFAULT_MAX_OUTPUT
         }).then((result) => ({
           index,
           command: cmd.command,
@@ -15168,13 +14539,33 @@ Longest: [${longestIdx}] ${longestDesc} (${longestDuration}ms)`;
     }
     case "fast_bash_sequence": {
       const commands = args.commands;
+      for (let i = 0;i < commands.length; i++) {
+        if (containsSudo(commands[i].command)) {
+          return {
+            content: [{ type: "text", text: `${SUDO_REJECTION_MESSAGE}[${i + 1}] $ ${commands[i].command}` }]
+          };
+        }
+      }
+      for (let i = 0;i < commands.length; i++) {
+        if (isInteractiveCommand(commands[i].command)) {
+          return {
+            content: [{ type: "text", text: `${INTERACTIVE_REJECTION_MESSAGE}[${i + 1}] $ ${commands[i].command}` }]
+          };
+        }
+      }
       const stopOnFailure = args.stop_on_failure !== false;
       const continueOnCodes = args.continue_on_codes || [0];
       const cwd = args.cwd;
-      const timeout = args.timeout || 300000;
+      const timeout = Math.min(args.timeout || DEFAULT_SEQUENCE_TIMEOUT, MAX_TIMEOUT);
       const shell = args.shell || "bash";
-      const env = args.env;
+      const { filtered: safeEnv, rejected: rejectedVars } = filterEnvVars(args.env);
       const outputFile = args.output_file;
+      if (outputFile) {
+        const check = sanitizeOutputPath(outputFile);
+        if (!check.valid) {
+          return { content: [{ type: "text", text: `[REJECTED] ${check.error}` }] };
+        }
+      }
       const seqResult = await executeSequence({
         commands,
         stopOnFailure,
@@ -15182,7 +14573,7 @@ Longest: [${longestIdx}] ${longestDesc} (${longestDuration}ms)`;
         cwd,
         timeout,
         shell,
-        env,
+        env: safeEnv,
         outputFile
       });
       const outputParts = seqResult.results.map((r) => {
@@ -15223,211 +14614,12 @@ Stopped at: [${seqResult.stoppedAt + 1}] ${stoppedDesc}`;
         response += `
 [output saved to: ${outputFile}]`;
       }
+      if (rejectedVars.length > 0) {
+        response += `
+[security: blocked env vars: ${rejectedVars.join(", ")}]`;
+      }
       return {
         content: [{ type: "text", text: response }]
-      };
-    }
-    case "fast_bash_bg": {
-      cleanupOldTasks();
-      const taskId = `task_${++taskIdCounter}`;
-      const command = args.command;
-      const description = args.description;
-      const cwd = args.cwd || DEFAULT_CWD;
-      const shell = args.shell || "bash";
-      const env = { ...process.env, ...args.env };
-      if (!fs.existsSync(cwd)) {
-        return {
-          content: [{
-            type: "text",
-            text: `[error]: Working directory does not exist: ${cwd}
-[error_type: cwd_not_found]`
-          }]
-        };
-      }
-      let proc;
-      try {
-        proc = spawn(shell, ["-c", command], {
-          cwd,
-          env,
-          stdio: ["pipe", "pipe", "pipe"]
-        });
-      } catch (err) {
-        return {
-          content: [{
-            type: "text",
-            text: `[error]: Failed to spawn process: ${err.message}
-[error_type: spawn_error]`
-          }]
-        };
-      }
-      const task = {
-        id: taskId,
-        command,
-        description,
-        startTime: Date.now(),
-        process: proc,
-        stdout: "",
-        stderr: "",
-        exitCode: null,
-        completed: false,
-        killed: false
-      };
-      proc.stdout?.on("data", (data) => {
-        task.stdout += data.toString();
-        if (task.stdout.length > MAX_BG_BUFFER) {
-          task.stdout = task.stdout.slice(-MAX_BG_BUFFER);
-        }
-      });
-      proc.stderr?.on("data", (data) => {
-        task.stderr += data.toString();
-        if (task.stderr.length > MAX_BG_BUFFER) {
-          task.stderr = task.stderr.slice(-MAX_BG_BUFFER);
-        }
-      });
-      proc.on("close", (code) => {
-        task.exitCode = code;
-        task.completed = true;
-        task.completedTime = Date.now();
-        task.error_type = classifyErrorType(code, task.killed, false);
-      });
-      proc.on("error", (err) => {
-        task.stderr += `
-[error]: ${err.message}`;
-        task.completed = true;
-        task.completedTime = Date.now();
-        task.exitCode = 1;
-        task.error_type = "spawn_error";
-      });
-      backgroundTasks.set(taskId, task);
-      proc.stdin?.end();
-      const cmdLine = formatCommandLine(command);
-      return {
-        content: [
-          {
-            type: "text",
-            text: `Background task started
-[task_id]: ${taskId}
-[command]: ${cmdLine}${description ? `
-[description]: ${description}` : ""}
-
-Use fast_bash_bg_status with task_id="${taskId}" to check status.`
-          }
-        ]
-      };
-    }
-    case "fast_bash_bg_status": {
-      const action = args.action || "status";
-      const maxOutput = args.max_output || 30000;
-      const tailLines = args.tail_lines;
-      const olderThanHours = args.older_than_hours || 1;
-      const outputFile = args.output_file;
-      if (action === "cleanup") {
-        const result = cleanupOldTasks(olderThanHours);
-        return {
-          content: [{
-            type: "text",
-            text: `Cleaned up ${result.cleaned} tasks older than ${olderThanHours} hour${olderThanHours !== 1 ? "s" : ""}
-Remaining: ${result.remaining} tasks (${result.running} running, ${result.completed} completed)`
-          }]
-        };
-      }
-      if (action === "list") {
-        if (backgroundTasks.size === 0) {
-          return { content: [{ type: "text", text: "No background tasks." }] };
-        }
-        const list = Array.from(backgroundTasks.values()).map((task2) => {
-          const status2 = task2.completed ? task2.exitCode === 0 ? "completed" : "failed" : "running";
-          const runtime2 = ((Date.now() - task2.startTime) / 1000).toFixed(1);
-          return `[${task2.id}] ${status2} (${runtime2}s) - ${task2.description || task2.command.slice(0, 50)}`;
-        }).join(`
-`);
-        return { content: [{ type: "text", text: list }] };
-      }
-      const taskId = args.task_id;
-      if (!taskId) {
-        return { content: [{ type: "text", text: "Error: task_id required for status/output/kill actions" }] };
-      }
-      const task = backgroundTasks.get(taskId);
-      if (!task) {
-        return { content: [{ type: "text", text: `Error: Task ${taskId} not found` }] };
-      }
-      if (action === "kill") {
-        if (task.completed) {
-          return { content: [{ type: "text", text: `Task ${taskId} already completed` }] };
-        }
-        task.killed = true;
-        task.process.kill("SIGTERM");
-        setTimeout(() => {
-          if (!task.completed) {
-            task.process.kill("SIGKILL");
-          }
-        }, GRACEFUL_TIMEOUT_MS);
-        return { content: [{ type: "text", text: `Task ${taskId} killed (SIGTERM sent, SIGKILL in ${GRACEFUL_TIMEOUT_MS}ms if needed)` }] };
-      }
-      if (action === "output") {
-        let stdout = task.stdout;
-        let stderr = task.stderr;
-        if (outputFile) {
-          writeOutputToFile(outputFile, stdout);
-        }
-        if (tailLines !== undefined && tailLines > 0) {
-          const lines = stdout.split(`
-`);
-          if (lines.length > tailLines) {
-            stdout = lines.slice(-tailLines).join(`
-`);
-          }
-        }
-        if (stdout.length > maxOutput)
-          stdout = middleTruncate(stdout, maxOutput);
-        if (stderr.length > maxOutput)
-          stderr = middleTruncate(stderr, maxOutput);
-        const duration3 = Date.now() - task.startTime;
-        let output = formatCommandLine(task.command) + `
-`;
-        if (stdout)
-          output += stdout;
-        if (stderr)
-          output += `
-[stderr]: ${stderr}`;
-        if (task.completed) {
-          if (task.killed)
-            output += `
-[killed]`;
-          if (task.error_type)
-            output += `
-[error_type: ${task.error_type}]`;
-          output += `
-[exit code: ${task.exitCode}]`;
-        } else {
-          output += `
-[still running...]`;
-        }
-        output += `
-${formatTiming(duration3)}`;
-        if (outputFile) {
-          output += `
-[full output saved to: ${outputFile}]`;
-        }
-        return { content: [{ type: "text", text: output.trim() || "(no output yet)" }] };
-      }
-      const runtime = ((Date.now() - task.startTime) / 1000).toFixed(1);
-      const status = task.completed ? task.exitCode === 0 ? "completed successfully" : `failed (exit ${task.exitCode})` : "running";
-      let statusOutput = `[task_id]: ${taskId}
-[status]: ${status}
-[runtime]: ${runtime}s
-[command]: ${task.command}`;
-      if (task.description)
-        statusOutput += `
-[description]: ${task.description}`;
-      if (task.error_type)
-        statusOutput += `
-[error_type]: ${task.error_type}`;
-      statusOutput += `
-[stdout bytes]: ${task.stdout.length}
-[stderr bytes]: ${task.stderr.length}`;
-      return {
-        content: [{ type: "text", text: statusOutput }]
       };
     }
     default:
@@ -15436,4 +14628,4 @@ ${formatTiming(duration3)}`;
 });
 var transport = new StdioServerTransport;
 server.connect(transport);
-console.error("Fast Bash MCP server v3.0 running");
+console.error(`Fast Bash MCP server v3.3 running (hardened: ${HARDENED_MODE ? "ON" : "OFF"})`);

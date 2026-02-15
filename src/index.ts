@@ -67,6 +67,12 @@ const VALID_SHELLS = ["bash", "zsh", "sh"] as const;
 // Sudo rejection message
 const SUDO_REJECTION_MESSAGE = "[REJECTED] sudo commands cannot be executed. Please STOP and ask human user to run it for you!\n";
 
+// Interactive command rejection message
+const INTERACTIVE_REJECTION_MESSAGE = "[REJECTED] Interactive commands cannot be executed in non-TTY mode. Use non-interactive alternatives (e.g. `ssh host 'command'` instead of `ssh host`).\n";
+
+// SSH hosts that are always blocked (even with remote commands)
+const BLOCKED_SSH_HOSTS = new Set(["supernova"]);
+
 // Security hardening toggle (set FAST_BASH_HARDENED=1 to enable)
 // When OFF: no path sanitization, no env var filtering, no max_output ceiling
 // When ON: blocks path traversal, system dir writes, dangerous env vars, caps max_output
@@ -104,6 +110,72 @@ const PROTECTED_ENV_VARS = new Set([
 function containsSudo(command: string): boolean {
   // Match sudo as a standalone command (not part of another word like "pseudocode")
   return /(?:^|[;&|`$()]\s*)sudo(?:\s|$)/m.test(command);
+}
+
+/**
+ * Check if a command would start an interactive session (no TTY available).
+ * Blocks: bare ssh/telnet/ftp without a remote command, bare shell/REPL invocations.
+ * Allows: ssh host 'cmd', ssh -o Option host cmd, scp, rsync, mysql -e 'query', etc.
+ */
+function isInteractiveCommand(command: string): boolean {
+  // Trim and split on pipes/chains to check each segment
+  const segments = command.split(/[;&|]+/).map((s) => s.trim());
+  for (const seg of segments) {
+    if (!seg) continue;
+    // Tokenize: strip leading env assignments (VAR=val) and get the binary + args
+    const tokens = seg.split(/\s+/);
+    let cmdIndex = 0;
+    while (cmdIndex < tokens.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(tokens[cmdIndex])) {
+      cmdIndex++;
+    }
+    if (cmdIndex >= tokens.length) continue;
+    const binary = path.basename(tokens[cmdIndex]);
+    const rest = tokens.slice(cmdIndex + 1);
+
+    // ssh: block specific hosts entirely, block interactive (no remote command) for others
+    if (binary === "ssh") {
+      // Collect non-flag arguments (skip flags and their values)
+      const flagsWithArg = new Set(["-b", "-c", "-D", "-E", "-e", "-F", "-I", "-i", "-J", "-L", "-l", "-m", "-O", "-o", "-p", "-Q", "-R", "-S", "-W", "-w"]);
+      const positional: string[] = [];
+      for (let i = 0; i < rest.length; i++) {
+        const tok = rest[i];
+        if (tok === "--") {
+          positional.push(...rest.slice(i + 1));
+          break;
+        }
+        if (tok.startsWith("-") && flagsWithArg.has(tok)) {
+          i++; // skip next token (flag value)
+        } else if (tok.startsWith("-")) {
+          // boolean flag, skip
+        } else {
+          positional.push(tok);
+        }
+      }
+      // Block specific SSH targets entirely (even with remote commands)
+      const host = positional[0]?.replace(/^.*@/, ""); // strip user@ prefix
+      if (host && BLOCKED_SSH_HOSTS.has(host)) return true;
+      // positional[0] = [user@]host, positional[1+] = remote command
+      if (positional.length <= 1) return true; // no remote command → interactive
+      continue;
+    }
+
+    if (binary === "telnet" || binary === "ftp" || binary === "sftp") {
+      return true; // always interactive
+    }
+
+    // Bare shell invocations (no -c flag → starts interactive session)
+    if ((binary === "bash" || binary === "zsh" || binary === "sh" || binary === "fish" || binary === "csh" || binary === "tcsh") && !rest.some((t) => t === "-c")) {
+      // Allow if a script file is passed (e.g. bash script.sh)
+      const nonFlagArgs = rest.filter((t) => !t.startsWith("-"));
+      if (nonFlagArgs.length === 0) return true; // bare shell → interactive
+    }
+
+    // Bare REPL invocations (python/node/etc. with no script or -c/-e)
+    if ((binary === "python" || binary === "python3" || binary === "python2") && rest.length === 0) return true;
+    if (binary === "node" && rest.length === 0) return true;
+    if (binary === "irb" || binary === "pry") return true;
+  }
+  return false;
 }
 
 /**
@@ -303,7 +375,7 @@ function writeOutputToFile(filePath: string, content: string): string | undefine
  * Execute a command and return result
  */
 function executeCommand(options: { command: string; cwd?: string; timeout?: number; shell?: string; env?: Record<string, string>; stdin?: string; maxOutput?: number; outputFile?: string; stderrFile?: string; loginShell?: boolean }): Promise<CommandResult> {
-  const { command, cwd = DEFAULT_CWD, timeout = DEFAULT_TIMEOUT, shell = "bash", env, stdin, maxOutput = DEFAULT_MAX_OUTPUT, outputFile, stderrFile, loginShell = true } = options;
+  const { command, cwd = DEFAULT_CWD, timeout = DEFAULT_TIMEOUT, shell = "bash", env, stdin, maxOutput = DEFAULT_MAX_OUTPUT, outputFile, stderrFile, loginShell = false } = options;
 
   return new Promise((resolve) => {
     const startTime = Date.now();
@@ -322,7 +394,7 @@ function executeCommand(options: { command: string; cwd?: string; timeout?: numb
       return;
     }
 
-    // Batch 1.3: CWD Validation
+    // CWD Validation
     if (!fs.existsSync(cwd)) {
       resolve({
         stdout: "",
@@ -346,6 +418,8 @@ function executeCommand(options: { command: string; cwd?: string; timeout?: numb
         cwd,
         env: mergedEnv,
         stdio: ["pipe", "pipe", "pipe"],
+        // Use process group so we can kill child processes too
+        detached: true,
       });
     } catch (err) {
       resolve({
@@ -360,31 +434,53 @@ function executeCommand(options: { command: string; cwd?: string; timeout?: numb
       return;
     }
 
+    // Close stdin immediately if no input — prevents commands from hanging
+    if (stdin) {
+      proc.stdin?.write(stdin);
+      proc.stdin?.end();
+    } else {
+      proc.stdin?.end();
+    }
+
     let stdout = "";
     let stderr = "";
     let killed = false;
     let forceKilled = false;
     let completed = false;
     let graceTimer: ReturnType<typeof setTimeout> | undefined;
+    let stdoutEnded = false;
+    let stderrEnded = false;
+    let exitCode: number | null = null;
 
-    // Batch 5.2: Graceful Timeout - SIGTERM first, then SIGKILL after grace period
+    // Kill the entire process group
+    const killGroup = (signal: NodeJS.Signals) => {
+      const pid = proc.pid;
+      if (pid) {
+        try {
+          // Kill process group (negative PID)
+          process.kill(-pid, signal);
+        } catch {
+          // Fallback to direct kill if group kill fails
+          proc.kill(signal);
+        }
+      } else {
+        proc.kill(signal);
+      }
+    };
+
+    // Graceful Timeout - SIGTERM first, then SIGKILL after grace period
     const timer = setTimeout(() => {
       killed = true;
-      proc.kill("SIGTERM");
+      killGroup("SIGTERM");
 
       // Grace period before SIGKILL
       graceTimer = setTimeout(() => {
         if (!completed) {
-          proc.kill("SIGKILL");
+          killGroup("SIGKILL");
           forceKilled = true;
         }
       }, GRACEFUL_TIMEOUT_MS);
     }, timeout);
-
-    if (stdin) {
-      proc.stdin?.write(stdin);
-      proc.stdin?.end();
-    }
 
     proc.stdout?.on("data", (data) => {
       if (stdout.length < MEMORY_CAP) {
@@ -398,13 +494,17 @@ function executeCommand(options: { command: string; cwd?: string; timeout?: numb
       }
     });
 
-    proc.on("close", (code) => {
+    // Wait for both streams to end AND process to close before resolving.
+    // This prevents the race condition where 'close' fires before all
+    // 'data' events have been flushed from stdout/stderr.
+    const maybeResolve = () => {
+      if (!stdoutEnded || !stderrEnded || exitCode === undefined) return;
       completed = true;
       clearTimeout(timer);
       if (graceTimer) clearTimeout(graceTimer);
       const durationMs = Date.now() - startTime;
 
-      // Batch 5.1: Write to files BEFORE truncation
+      // Write to files BEFORE truncation
       if (outputFile) {
         writeOutputToFile(outputFile, stdout);
       }
@@ -422,17 +522,32 @@ function executeCommand(options: { command: string; cwd?: string; timeout?: numb
         truncatedStderr = middleTruncate(truncatedStderr, maxOutput);
       }
 
-      const error_type = classifyErrorType(code, killed, forceKilled);
+      const error_type = classifyErrorType(exitCode, killed, forceKilled);
 
       resolve({
         stdout: truncatedStdout,
         stderr: truncatedStderr,
-        exitCode: killed ? EXIT_CODE_TIMEOUT : code,
+        exitCode: killed ? EXIT_CODE_TIMEOUT : exitCode,
         killed,
         forceKilled,
         error_type,
         durationMs,
       });
+    };
+
+    proc.stdout?.on("end", () => {
+      stdoutEnded = true;
+      maybeResolve();
+    });
+
+    proc.stderr?.on("end", () => {
+      stderrEnded = true;
+      maybeResolve();
+    });
+
+    proc.on("close", (code) => {
+      exitCode = code;
+      maybeResolve();
     });
 
     proc.on("error", (err) => {
@@ -570,6 +685,7 @@ async function executeSequence(options: { commands: Array<{ command: string; des
         cwd,
         env: mergedEnv,
         stdio: ["pipe", "pipe", "pipe"],
+        detached: true,
       });
     } catch (err) {
       resolve({
@@ -594,18 +710,34 @@ async function executeSequence(options: { commands: Array<{ command: string; des
       return;
     }
 
+    // Close stdin immediately — sequences don't accept interactive input
+    proc.stdin?.end();
+
     let stdout = "";
     let stderr = "";
     let killed = false;
     let completed = false;
     let graceTimer: ReturnType<typeof setTimeout> | undefined;
+    let stdoutEnded = false;
+    let stderrEnded = false;
+    let processExited = false;
+
+    // Kill the entire process group
+    const killGroup = (signal: NodeJS.Signals) => {
+      const pid = proc.pid;
+      if (pid) {
+        try { process.kill(-pid, signal); } catch { proc.kill(signal); }
+      } else {
+        proc.kill(signal);
+      }
+    };
 
     const timer = setTimeout(() => {
       killed = true;
-      proc.kill("SIGTERM");
+      killGroup("SIGTERM");
       graceTimer = setTimeout(() => {
         if (!completed) {
-          proc.kill("SIGKILL");
+          killGroup("SIGKILL");
         }
       }, GRACEFUL_TIMEOUT_MS);
     }, timeout);
@@ -622,7 +754,9 @@ async function executeSequence(options: { commands: Array<{ command: string; des
       }
     });
 
-    proc.on("close", () => {
+    // Wait for streams + close to all finish before resolving
+    const maybeResolve = () => {
+      if (!stdoutEnded || !stderrEnded || !processExited) return;
       completed = true;
       clearTimeout(timer);
       if (graceTimer) clearTimeout(graceTimer);
@@ -726,7 +860,11 @@ async function executeSequence(options: { commands: Array<{ command: string; des
         executed: results.length,
         stoppedAt,
       });
-    });
+    };
+
+    proc.stdout?.on("end", () => { stdoutEnded = true; maybeResolve(); });
+    proc.stderr?.on("end", () => { stderrEnded = true; maybeResolve(); });
+    proc.on("close", () => { processExited = true; maybeResolve(); });
 
     proc.on("error", (err) => {
       completed = true;
@@ -936,6 +1074,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         };
       }
 
+      // Reject interactive commands (no TTY available)
+      if (isInteractiveCommand(command)) {
+        return {
+          content: [{ type: "text", text: `${INTERACTIVE_REJECTION_MESSAGE}$ ${command}` }],
+        };
+      }
+
       // Validate output file paths
       const fileError = validateOutputFiles(args.output_file as string | undefined, args.stderr_file as string | undefined);
       if (fileError) {
@@ -957,7 +1102,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         maxOutput: clampMaxOutput(args.max_output as number | undefined),
         outputFile: args.output_file as string | undefined,
         stderrFile: args.stderr_file as string | undefined,
-        loginShell: (args.login_shell as boolean) ?? true,
+        loginShell: (args.login_shell as boolean) ?? false,
       });
 
       // Use formatFullOutput for DRY consistency
@@ -1002,6 +1147,15 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         if (containsSudo(commands[i].command)) {
           return {
             content: [{ type: "text", text: `${SUDO_REJECTION_MESSAGE}[${i + 1}] $ ${commands[i].command}` }],
+          };
+        }
+      }
+
+      // Reject interactive commands
+      for (let i = 0; i < commands.length; i++) {
+        if (isInteractiveCommand(commands[i].command)) {
+          return {
+            content: [{ type: "text", text: `${INTERACTIVE_REJECTION_MESSAGE}[${i + 1}] $ ${commands[i].command}` }],
           };
         }
       }
@@ -1137,6 +1291,15 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         }
       }
 
+      // Reject interactive commands
+      for (let i = 0; i < commands.length; i++) {
+        if (isInteractiveCommand(commands[i].command)) {
+          return {
+            content: [{ type: "text", text: `${INTERACTIVE_REJECTION_MESSAGE}[${i + 1}] $ ${commands[i].command}` }],
+          };
+        }
+      }
+
       const stopOnFailure = args.stop_on_failure !== false; // default true
       const continueOnCodes = (args.continue_on_codes as number[]) || [0];
       const cwd = args.cwd as string | undefined;
@@ -1219,4 +1382,4 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
 const transport = new StdioServerTransport();
 server.connect(transport);
-console.error(`Fast Bash MCP server v3.2 running (hardened: ${HARDENED_MODE ? "ON" : "OFF"})`);
+console.error(`Fast Bash MCP server v3.3 running (hardened: ${HARDENED_MODE ? "ON" : "OFF"})`);
